@@ -1,0 +1,40 @@
+{
+  "type": "record",
+  "name": "PurchaseEvent",
+  "namespace": "com.clickstream.guardian",
+  "doc": "Schema for purchase events from e-commerce platform",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "long",
+      "doc": "Unique identifier for the user session"
+    },
+    {
+      "name": "event_ts",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Timestamp when the purchase occurred (milliseconds since epoch)"
+    },
+    {
+      "name": "item_id",
+      "type": "long",
+      "doc": "Unique identifier of the purchased item"
+    },
+    {
+      "name": "price",
+      "type": "double",
+      "doc": "Price of the item"
+    },
+    {
+      "name": "quantity",
+      "type": "int",
+      "doc": "Quantity purchased"
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "default": "purchase",
+      "doc": "Type of event, always 'purchase' for this schema"
+    }
+  ]
+}

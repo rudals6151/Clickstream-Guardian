@@ -1,0 +1,28 @@
+# Clickstream Guardian - Global Dependencies
+# Install these for local development (not required for Docker)
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.2
+
+# Kafka & Streaming
+confluent-kafka[avro]==2.3.0
+kafka-python==2.0.2
+
+# Database
+psycopg2-binary==2.9.9
+
+# AWS/S3
+boto3==1.34.0
+
+# Development
+jupyter==1.0.0
+ipython==8.18.1
+
+# Testing
+pytest==7.4.3
+locust==2.20.0
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0

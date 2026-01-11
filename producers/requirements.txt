@@ -1,0 +1,4 @@
+confluent-kafka[avro]==2.3.0
+avro-python3==1.10.2
+requests==2.31.0
+python-dateutil==2.8.2
