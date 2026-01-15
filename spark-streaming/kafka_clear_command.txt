@@ -1,0 +1,5 @@
+# 삭제
+docker exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --delete --topic km.clicks.raw.v1
+
+# 재생성
+docker exec kafka-1 kafka-topics --bootstrap-server kafka-1:29092 --create --topic km.clicks.raw.v1 --partitions 4 --replication-factor 2
