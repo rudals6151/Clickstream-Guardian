@@ -7,9 +7,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- REAL-TIME ANOMALY DETECTION TABLES
 -- ============================================================================
 
--- Anomaly Sessions Table
+-- Anomaly Sessions Table with Daily Partitioning
+-- Using SERIAL id as PRIMARY KEY to allow multiple detections per session across different windows
+-- Partitioned by detected_at date for efficient time-based queries and data management
 CREATE TABLE IF NOT EXISTS anomaly_sessions (
-    session_id BIGINT PRIMARY KEY,
+    id BIGSERIAL NOT NULL,
+    session_id BIGINT NOT NULL,
     detected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     window_start TIMESTAMP NOT NULL,
     window_end TIMESTAMP NOT NULL,
@@ -17,15 +20,27 @@ CREATE TABLE IF NOT EXISTS anomaly_sessions (
     unique_items INTEGER NOT NULL CHECK (unique_items >= 0),
     anomaly_score FLOAT NOT NULL CHECK (anomaly_score >= 0),
     anomaly_type VARCHAR(50) NOT NULL CHECK (anomaly_type IN ('HIGH_FREQUENCY', 'BOT_LIKE', 'SPAM', 'OTHER')),
-    category_distribution JSONB,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, detected_at)
+    -- Note: UNIQUE constraint removed due to partitioning requirements
+    -- Duplicate prevention is handled at application level (Spark) via ON CONFLICT on window_start
+) PARTITION BY RANGE (detected_at);
 
--- Indexes for anomaly_sessions
+-- Default partition for dates outside defined ranges (required for initial setup)
+CREATE TABLE IF NOT EXISTS anomaly_sessions_default PARTITION OF anomaly_sessions DEFAULT;
+
+-- Partitions will be created dynamically using create_initial_partitions() function below
+
+-- Indexes for anomaly_sessions (automatically created on all partitions)
+CREATE INDEX IF NOT EXISTS idx_anomaly_session_id ON anomaly_sessions(session_id);
 CREATE INDEX IF NOT EXISTS idx_anomaly_detected_at ON anomaly_sessions(detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_anomaly_type ON anomaly_sessions(anomaly_type);
 CREATE INDEX IF NOT EXISTS idx_anomaly_score ON anomaly_sessions(anomaly_score DESC);
 CREATE INDEX IF NOT EXISTS idx_anomaly_window ON anomaly_sessions(window_start, window_end);
+
+-- Composite index for duplicate detection (replaces UNIQUE constraint)
+-- This helps application-level duplicate prevention without enforcing database constraint
+CREATE INDEX IF NOT EXISTS idx_anomaly_dedup ON anomaly_sessions(session_id, window_start, anomaly_type, detected_at);
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -56,7 +71,7 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
     conversion_rate FLOAT CHECK (conversion_rate >= 0 AND conversion_rate <= 1),
     avg_session_duration_sec FLOAT CHECK (avg_session_duration_sec >= 0),
     avg_clicks_per_session FLOAT CHECK (avg_clicks_per_session >= 0),
-    total_revenue BIGINT DEFAULT 0 CHECK (total_revenue >= 0),
+    total_revenue NUMERIC(15,2) DEFAULT 0 CHECK (total_revenue >= 0),
     avg_order_value FLOAT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -92,7 +107,7 @@ CREATE TABLE IF NOT EXISTS popular_items (
     category VARCHAR(100),
     click_count INTEGER NOT NULL DEFAULT 0 CHECK (click_count >= 0),
     purchase_count INTEGER NOT NULL DEFAULT 0 CHECK (purchase_count >= 0),
-    revenue BIGINT NOT NULL DEFAULT 0 CHECK (revenue >= 0),
+    revenue NUMERIC(15,2) NOT NULL DEFAULT 0 CHECK (revenue >= 0),
     rank INTEGER NOT NULL CHECK (rank > 0),
     click_to_purchase_ratio FLOAT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -112,7 +127,7 @@ CREATE TABLE IF NOT EXISTS popular_categories (
     click_count INTEGER NOT NULL DEFAULT 0,
     purchase_count INTEGER NOT NULL DEFAULT 0,
     unique_items INTEGER NOT NULL DEFAULT 0,
-    revenue BIGINT NOT NULL DEFAULT 0,
+    revenue NUMERIC(15,2) NOT NULL DEFAULT 0,
     rank INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (metric_date, category)
@@ -195,6 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status ON pipeline_runs(status);
 -- View: Recent Anomalies (Last 24 Hours)
 CREATE OR REPLACE VIEW v_recent_anomalies AS
 SELECT 
+    id,
     session_id,
     detected_at,
     window_start,
@@ -273,53 +289,123 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO admin;
 -- SAMPLE DATA (FOR TESTING)
 -- ============================================================================
 
--- Insert sample anomaly session
-INSERT INTO anomaly_sessions (
-    session_id, detected_at, window_start, window_end, 
-    click_count, unique_items, anomaly_score, anomaly_type
-) VALUES (
-    999999, 
-    CURRENT_TIMESTAMP, 
-    CURRENT_TIMESTAMP - INTERVAL '10 seconds', 
-    CURRENT_TIMESTAMP,
-    150, 
-    5, 
-    3.0, 
-    'HIGH_FREQUENCY'
-) ON CONFLICT (session_id) DO NOTHING;
-
--- Insert sample daily metric
-INSERT INTO daily_metrics (
-    metric_date, total_clicks, total_purchases, unique_sessions,
-    unique_items, conversion_rate, avg_clicks_per_session,
-    avg_session_duration_sec, total_revenue
-) VALUES (
-    CURRENT_DATE - INTERVAL '1 day',
-    1000000,
-    35000,
-    50000,
-    10000,
-    0.035,
-    20.0,
-    300.0,
-    5000000
-) ON CONFLICT (metric_date) DO NOTHING;
+-- Sample data will be inserted after partitions are created in the completion block
 
 -- ============================================================================
 -- UTILITY FUNCTIONS
 -- ============================================================================
 
--- Function to clean old anomaly records (keep last 30 days)
-CREATE OR REPLACE FUNCTION cleanup_old_anomalies()
-RETURNS INTEGER AS $$
+-- Function to create daily partition for anomaly_sessions
+CREATE OR REPLACE FUNCTION create_anomaly_partition(target_date DATE)
+RETURNS TEXT AS $$
 DECLARE
-    deleted_count INTEGER;
+    partition_name TEXT;
+    start_ts TIMESTAMP;
+    end_ts TIMESTAMP;
 BEGIN
-    DELETE FROM anomaly_sessions
-    WHERE detected_at < CURRENT_TIMESTAMP - INTERVAL '30 days';
+    -- Generate partition name: anomaly_sessions_YYYY_MM_DD
+    partition_name := 'anomaly_sessions_' || TO_CHAR(target_date, 'YYYY_MM_DD');
+    start_ts := target_date::TIMESTAMP;
+    end_ts := (target_date + INTERVAL '1 day')::TIMESTAMP;
     
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    RETURN deleted_count;
+    -- Check if partition already exists
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = partition_name
+        AND n.nspname = 'public'
+    ) THEN
+        -- Create partition
+        EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS %I PARTITION OF anomaly_sessions FOR VALUES FROM (%L) TO (%L)',
+            partition_name, start_ts, end_ts
+        );
+        RETURN 'Created partition: ' || partition_name || ' (' || start_ts || ' to ' || end_ts || ')';
+    ELSE
+        RETURN 'Partition already exists: ' || partition_name;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to create partitions for next N days
+CREATE OR REPLACE FUNCTION create_future_partitions(days_ahead INTEGER DEFAULT 7)
+RETURNS TEXT AS $$
+DECLARE
+    result TEXT := '';
+    i INTEGER;
+    partition_result TEXT;
+BEGIN
+    FOR i IN 0..days_ahead LOOP
+        SELECT create_anomaly_partition(CURRENT_DATE + i) INTO partition_result;
+        result := result || partition_result || E'\n';
+    END LOOP;
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to create initial partitions (for database initialization)
+CREATE OR REPLACE FUNCTION create_initial_partitions()
+RETURNS TEXT AS $$
+DECLARE
+    result TEXT;
+BEGIN
+    -- Create partitions for today + next 7 days
+    SELECT create_future_partitions(7) INTO result;
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to clean old anomaly records (keep last 30 days)
+-- Now also drops old partitions for better performance
+CREATE OR REPLACE FUNCTION cleanup_old_anomalies(days_to_keep INTEGER DEFAULT 30)
+RETURNS TEXT AS $$
+DECLARE
+    partition_record RECORD;
+    cutoff_date DATE;
+    partition_date DATE;
+    result TEXT := '';
+    dropped_count INTEGER := 0;
+BEGIN
+    cutoff_date := CURRENT_DATE - days_to_keep;
+    
+    -- Drop old partitions (except default partition)
+    FOR partition_record IN 
+        SELECT c.relname as partition_name
+        FROM pg_class c
+        JOIN pg_inherits i ON i.inhrelid = c.oid
+        JOIN pg_class p ON p.oid = i.inhparent
+        WHERE p.relname = 'anomaly_sessions'
+        AND c.relname LIKE 'anomaly_sessions______%'
+        AND c.relname != 'anomaly_sessions_default'
+    LOOP
+        -- Parse date from partition name: anomaly_sessions_YYYY_MM_DD
+        BEGIN
+            partition_date := TO_DATE(
+                SUBSTRING(partition_record.partition_name FROM 'anomaly_sessions_(\d{4}_\d{2}_\d{2})'),
+                'YYYY_MM_DD'
+            );
+            
+            -- Drop if older than cutoff date
+            IF partition_date < cutoff_date THEN
+                EXECUTE format('DROP TABLE IF EXISTS %I', partition_record.partition_name);
+                result := result || 'Dropped partition: ' || partition_record.partition_name || 
+                         ' (date: ' || partition_date || ')' || E'\n';
+                dropped_count := dropped_count + 1;
+            END IF;
+        EXCEPTION
+            WHEN OTHERS THEN
+                result := result || 'Warning: Could not parse date from ' || partition_record.partition_name || E'\n';
+        END;
+    END LOOP;
+    
+    -- Summary
+    IF dropped_count = 0 THEN
+        result := result || 'No old partitions to drop (keeping last ' || days_to_keep || ' days, cutoff: ' || cutoff_date || ')';
+    ELSE
+        result := result || 'Total partitions dropped: ' || dropped_count;
+    END IF;
+    
+    RETURN result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -357,9 +443,74 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 
 DO $$
+DECLARE
+    partition_result TEXT;
 BEGIN
-    RAISE NOTICE 'Clickstream Guardian database initialized successfully!';
-    RAISE NOTICE 'Tables created: anomaly_sessions, daily_metrics, session_funnel, popular_items, popular_categories, session_summary';
-    RAISE NOTICE 'Views created: v_recent_anomalies, v_daily_metrics_summary, v_top_items_revenue, v_latest_funnel';
-    RAISE NOTICE 'Functions created: cleanup_old_anomalies(), get_system_health()';
+    -- Create initial partitions dynamically
+    SELECT create_initial_partitions() INTO partition_result;
+    
+    -- Insert sample data after partitions are created
+    INSERT INTO anomaly_sessions (
+        session_id, detected_at, window_start, window_end, 
+        click_count, unique_items, anomaly_score, anomaly_type
+    ) VALUES (
+        999999, 
+        CURRENT_TIMESTAMP, 
+        CURRENT_TIMESTAMP - INTERVAL '10 seconds', 
+        CURRENT_TIMESTAMP,
+        150, 
+        5, 
+        3.0, 
+        'HIGH_FREQUENCY'
+    );
+    
+    INSERT INTO daily_metrics (
+        metric_date, total_clicks, total_purchases, unique_sessions,
+        unique_items, conversion_rate, avg_clicks_per_session,
+        avg_session_duration_sec, total_revenue
+    ) VALUES (
+        CURRENT_DATE - INTERVAL '1 day',
+        1000000,
+        35000,
+        50000,
+        10000,
+        0.035,
+        20.0,
+        300.0,
+        5000000
+    ) ON CONFLICT (metric_date) DO NOTHING;
+    
+    -- Display initialization summary
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'Clickstream Guardian Database Initialized Successfully!';
+    RAISE NOTICE '========================================';
+    RAISE NOTICE '';
+    RAISE NOTICE '📊 Tables Created:';
+    RAISE NOTICE '  - anomaly_sessions (PARTITIONED by detected_at)';
+    RAISE NOTICE '  - daily_metrics, session_funnel, popular_items';
+    RAISE NOTICE '  - popular_categories, session_summary';
+    RAISE NOTICE '';
+    RAISE NOTICE '📈 Views Created:';
+    RAISE NOTICE '  - v_recent_anomalies, v_daily_metrics_summary';
+    RAISE NOTICE '  - v_top_items_revenue, v_latest_funnel';
+    RAISE NOTICE '';
+    RAISE NOTICE '🔧 Functions Created:';
+    RAISE NOTICE '  - create_anomaly_partition(date) - Create single partition';
+    RAISE NOTICE '  - create_future_partitions(days) - Create multiple partitions';
+    RAISE NOTICE '  - create_initial_partitions() - Create initial partitions';
+    RAISE NOTICE '  - cleanup_old_anomalies(days) - Drop old partitions safely';
+    RAISE NOTICE '  - get_system_health() - Check system status';
+    RAISE NOTICE '';
+    RAISE NOTICE '🗂️  Initial Partitions Created:';
+    RAISE NOTICE '%', partition_result;
+    RAISE NOTICE '';
+    RAISE NOTICE '💡 Usage Examples:';
+    RAISE NOTICE '  - Create partitions: SELECT create_future_partitions(7);';
+    RAISE NOTICE '  - Cleanup old data: SELECT cleanup_old_anomalies(30);';
+    RAISE NOTICE '  - Check health: SELECT * FROM get_system_health();';
+    RAISE NOTICE '  - List partitions: SELECT tablename FROM pg_tables WHERE tablename LIKE ''anomaly_sessions%%'';';
+    RAISE NOTICE '';
+    RAISE NOTICE '⚠️  Remember: Run create_future_partitions() periodically to create upcoming partitions';
+    RAISE NOTICE '';
+    RAISE NOTICE '========================================';
 END $$;

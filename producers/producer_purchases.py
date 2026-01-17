@@ -2,13 +2,20 @@
 cd c:/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/producers
 python producer_purchases.py
 """
+
 """
 Kafka Producer for Purchase Events (Improved)
 - Sorts events by timestamp for realistic replay
 - Enhanced logging for monitoring
 - DLQ for parse/serialize/produce failures
 - Stable poll cadence based on produce-call counts
+
+FIXED:
+- Revenue in progress log increases naturally with 'sent' by accumulating revenue
+  ONLY on successful delivery callback (on_delivery).
+- No 'opaque' usage (not supported by confluent_kafka-python).
 """
+
 import csv
 import time
 import json
@@ -52,10 +59,10 @@ class ImprovedPurchaseProducer:
 
         # Statistics
         self.stats = {
-            'sent': 0,
-            'failed': 0,
+            'sent': 0,           # delivery success count
+            'failed': 0,         # local/serialize/produce errors + delivery errors
             'dlq': 0,
-            'total_revenue': 0,
+            'total_revenue': 0,  # delivered revenue (ONLY increments on delivery success)
             'start_time': time.time()
         }
 
@@ -72,24 +79,21 @@ class ImprovedPurchaseProducer:
     def parse_row(self, row):
         """Parse CSV row to event dictionary"""
         try:
-            # Parse timestamp
-            event_ts = datetime.fromisoformat(
-                row['Timestamp'].replace('Z', '+00:00')
-            )
+            event_ts = datetime.fromisoformat(row['Timestamp'].replace('Z', '+00:00'))
 
             price = int(row['Price'])
             quantity = int(row['Quantity'])
 
-            # Create event dictionary matching Avro schema
             event = {
                 'session_id': int(row['Session ID']),
                 'event_ts': int(event_ts.timestamp() * 1000),  # milliseconds
                 'item_id': int(row['Item ID']),
-                'price': float(price),  # Convert to double for schema compatibility
+                'price': float(price),
                 'quantity': quantity
             }
 
-            return event, price * quantity
+            revenue = price * quantity
+            return event, revenue
         except Exception as e:
             logger.error(f"❌ Parse error: {e}, row: {row}")
             return None, 0
@@ -139,43 +143,53 @@ class ImprovedPurchaseProducer:
         events = []
         total_revenue = 0
 
-        try:
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    event, revenue = self.parse_row(row)
-                    if event:
-                        events.append(event)
-                        total_revenue += revenue
-                    else:
-                        # DLQ for parse failures
-                        self.send_to_dlq(original=row, error_msg="Failed to parse row", stage="parse")
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                event, revenue = self.parse_row(row)
+                if event:
+                    events.append(event)
+                    total_revenue += revenue
+                else:
+                    self.send_to_dlq(original=row, error_msg="Failed to parse row", stage="parse")
 
-            logger.info(f"✅ Loaded {len(events):,} purchase events (already sorted)")
-            logger.info(f"   💰 Total revenue: ${total_revenue:,}")
+        logger.info(f"✅ Loaded {len(events):,} purchase events (already sorted)")
+        logger.info(f"   💰 Total revenue (from file): ${total_revenue:,}")
 
-            if events:
-                first_ts = datetime.fromtimestamp(events[0]['event_ts'] / 1000)
-                last_ts = datetime.fromtimestamp(events[-1]['event_ts'] / 1000)
-                logger.info(f"   📅 Original time range: {first_ts} to {last_ts}")
+        if events:
+            first_ts = datetime.fromtimestamp(events[0]['event_ts'] / 1000)
+            last_ts = datetime.fromtimestamp(events[-1]['event_ts'] / 1000)
+            logger.info(f"   📅 Original time range: {first_ts} to {last_ts}")
 
-            return events
-        except FileNotFoundError:
-            logger.error(f"❌ File not found: {csv_path}")
-            raise
-        except Exception as e:
-            logger.error(f"❌ Error loading file: {e}")
-            raise
+        return events
 
-    def delivery_report(self, err, msg):
-        """Callback for message delivery reports"""
-        if err:
-            self.stats['failed'] += 1
-            logger.error(f"❌ Delivery failed: {err}")
-        else:
+    def _make_delivery_cb(self, revenue, event):
+        """
+        Create a delivery callback that closes over revenue (and optionally event).
+        confluent_kafka callback signature is (err, msg).
+        """
+        def _cb(err, msg):
+            if err:
+                self.stats['failed'] += 1
+                logger.error(f"❌ Delivery failed: {err}")
+
+                # Optional: DLQ on delivery failure (useful)
+                try:
+                    self.send_to_dlq(
+                        original={'delivery_failed': True},
+                        error_msg=str(err),
+                        stage="delivery",
+                        event=event
+                    )
+                except Exception:
+                    pass
+                return
+
+            # Delivery success
             self.stats['sent'] += 1
+            self.stats['total_revenue'] += int(revenue)
 
-            # Log progress every 10 events (purchases are rare)
+            # Progress log every 10 purchases
             if self.stats['sent'] % 10 == 0:
                 elapsed = time.time() - self.stats['start_time']
                 rate = self.stats['sent'] / elapsed if elapsed > 0 else 0
@@ -183,10 +197,12 @@ class ImprovedPurchaseProducer:
                     f"📈 Progress: {self.stats['sent']:,} purchases "
                     f"({rate:.1f} msg/sec, revenue: ${self.stats['total_revenue']:,}, dlq: {self.stats['dlq']:,})"
                 )
+        return _cb
 
-    def send_event(self, event, revenue, original_row=None):
+    def send_event(self, event, original_row=None):
         """Send a single purchase event to Kafka (Avro). On failure -> DLQ."""
         try:
+            revenue = int(event['price'] * event['quantity'])
             key = str(event['session_id']).encode('utf-8')
 
             # Serialize with Avro
@@ -213,15 +229,13 @@ class ImprovedPurchaseProducer:
                     topic=self.topic,
                     key=key,
                     value=value,
-                    on_delivery=self.delivery_report
+                    on_delivery=self._make_delivery_cb(revenue, event)
                 )
                 self._produced_calls += 1
 
                 # Stable poll cadence based on produce-call count
                 if self._produced_calls % 100 == 0:
                     self.producer.poll(0)
-
-                self.stats['total_revenue'] += revenue
 
             except Exception as e:
                 logger.error(f"❌ Produce failed: {e}")
@@ -244,55 +258,41 @@ class ImprovedPurchaseProducer:
             )
 
     def produce_from_sorted_csv(self, csv_path):
-        """
-        Produce purchase events from CSV file (time-ordered)
-        Uses CURRENT timestamp instead of historical timestamps.
-
-        Args:
-            csv_path: Path to pre-sorted CSV file
-        """
+        """Produce purchase events from CSV file (time-ordered) using CURRENT timestamps."""
         logger.info("=" * 80)
         logger.info("🎬 Starting purchase producer with CURRENT TIMESTAMPS + DLQ")
         logger.info(f"   📁 File: {csv_path}")
         logger.info("=" * 80)
 
-        # Load events (already sorted)
         events = self.load_events(csv_path)
         if not events:
             logger.error("❌ No events loaded!")
             return
 
-        # Calculate time offset: current time - first event time
+        # Shift timestamps to now
         first_event_ts = events[0]['event_ts']
         current_time_ms = int(time.time() * 1000)
         time_offset = current_time_ms - first_event_ts
-
         logger.info(f"⏰ Time offset: +{time_offset/1000:.0f} seconds (shifting to current time)")
 
         prev_ts = None
-
         for event in events:
-            # Convert timestamp to current time
             original_ts = event['event_ts']
             event['event_ts'] = original_ts + time_offset
 
-            # Calculate revenue for this purchase
-            revenue = int(event['price'] * event['quantity'])
+            self.send_event(event, original_row=None)
 
-            # Send event
-            self.send_event(event, revenue, original_row=None)
-
-            # Replay speed control (based on original time intervals)
+            # Replay speed control
             if prev_ts and self.replay_speed < 100:
                 current_dt = datetime.fromtimestamp(original_ts / 1000)
                 prev_dt = datetime.fromtimestamp(prev_ts / 1000)
                 delay = (current_dt - prev_dt).total_seconds() / self.replay_speed
                 if delay > 0:
-                    time.sleep(min(delay, 0.1))  # Cap at 0.1 second
+                    time.sleep(min(delay, 0.1))
 
             prev_ts = original_ts
 
-        # Final flush
+        # Final flush (drives callbacks too)
         logger.info("\n⏳ Flushing remaining messages...")
         remaining = self.producer.flush(timeout=30)
         if remaining > 0:
@@ -302,21 +302,19 @@ class ImprovedPurchaseProducer:
         if dlq_remaining > 0:
             logger.warning(f"⚠️  {dlq_remaining} messages failed to flush (DLQ producer)")
 
-        # Print final statistics
         elapsed = time.time() - self.stats['start_time']
         logger.info("\n" + "=" * 80)
         logger.info("✅ Purchase producer finished!")
         logger.info(f"   📤 Sent (delivered): {self.stats['sent']:,} purchases")
-        logger.info(f"   💰 Total revenue: ${self.stats['total_revenue']:,}")
+        logger.info(f"   💰 Total revenue (delivered): ${self.stats['total_revenue']:,}")
         logger.info(f"   🧯 DLQ: {self.stats['dlq']:,} messages")
-        logger.info(f"   ❌ Failed (local errors): {self.stats['failed']:,} events")
+        logger.info(f"   ❌ Failed (local + delivery errors): {self.stats['failed']:,} events")
         logger.info(f"   ⏱️  Duration: {elapsed:.2f} seconds")
         logger.info(f"   📊 Avg Rate: {self.stats['sent'] / elapsed:.1f} msg/sec" if elapsed > 0 else "   📊 Avg Rate: N/A")
         logger.info("=" * 80)
 
 
 def main():
-    """Main entry point"""
     import argparse
 
     parser = argparse.ArgumentParser(description='Improved Purchase Events Producer')
@@ -325,7 +323,6 @@ def main():
         default=Config.PURCHASES_FILE,
         help='Path to purchases CSV file'
     )
-
     args = parser.parse_args()
 
     producer = ImprovedPurchaseProducer()

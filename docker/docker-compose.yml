@@ -190,6 +190,8 @@ services:
       - "8080:8080"
     environment:
       - SPARK_NO_DAEMONIZE=1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ../spark-streaming:/opt/spark-streaming
       - ../spark-batch:/opt/spark-batch
@@ -210,8 +212,8 @@ services:
       - "8084:8081"
     environment:
       - SPARK_NO_DAEMONIZE=1
-      - SPARK_WORKER_MEMORY=4G
-      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=1
     volumes:
       - ../spark-streaming:/opt/spark-streaming
       - ../spark-batch:/opt/spark-batch
@@ -293,10 +295,13 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=REDACTED_FERNET_KEY
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__WEBSERVER__SECRET_KEY=secret
+      - AIRFLOW__WEBSERVER__SECRET_KEY=REDACTED_WEBSERVER_SECRET
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../airflow/plugins:/opt/airflow/plugins
+      - ../spark-batch:/opt/airflow/spark-batch
       - airflow-logs:/opt/airflow/logs
     networks:
       - clickstream-net
@@ -318,10 +323,15 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=REDACTED_FERNET_KEY
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=REDACTED_WEBSERVER_SECRET
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../airflow/plugins:/opt/airflow/plugins
+      - ../spark-batch:/opt/airflow/spark-batch
       - airflow-logs:/opt/airflow/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - clickstream-net
     command: scheduler

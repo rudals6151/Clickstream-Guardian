@@ -7,6 +7,8 @@ based on patterns like:
 - Repetitive behavior
 - Unusual session duration
 """
+
+# docker logs -f spark-streaming-anomaly
 import sys
 import logging
 from pyspark.sql import SparkSession

@@ -1,6 +1,5 @@
 """
 cd c:/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/producers
-cd c:/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/producers
 python producer_clicks.py --file ../data/yoochoose-clicks-sorted.dat --anomaly-interval 10
 """
 
