@@ -146,7 +146,8 @@ services:
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
     volumes:
-      - ./connectors:/etc/kafka-connect/connectors
+      - ./connectors:/etc/kafka-connect/scripts
+      - ../connectors:/etc/kafka-connect/connectors
     networks:
       - clickstream-net
     command:
@@ -154,7 +155,8 @@ services:
       - -c
       - |
         confluent-hub install --no-prompt confluentinc/kafka-connect-s3:10.5.0
-        /etc/confluent/docker/run
+        /etc/confluent/docker/run &
+        bash /etc/kafka-connect/scripts/init-connectors.sh
 
   # PostgreSQL
   postgres:

@@ -30,7 +30,7 @@
     "errors.deadletterqueue.topic.replication.factor": "2",
     "errors.deadletterqueue.context.headers.enable": "true",
     "store.kafka.max.retries": "3",
-    "aws.access.key.id": "${env:AWS_ACCESS_KEY_ID}",
-    "aws.secret.access.key": "${env:AWS_SECRET_ACCESS_KEY}"
+    "aws.access.key.id": "${AWS_ACCESS_KEY_ID}",
+    "aws.secret.access.key": "${AWS_SECRET_ACCESS_KEY}"
   }
 }
