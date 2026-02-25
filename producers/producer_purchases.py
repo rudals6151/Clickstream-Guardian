@@ -20,6 +20,7 @@ import csv
 import time
 import json
 import logging
+import hashlib
 from datetime import datetime
 from confluent_kafka import Producer
 
@@ -32,6 +33,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def make_event_id(session_id: int, item_id: int, event_ts: int, quantity: int, price: float) -> str:
+    raw = f"{session_id}|{item_id}|{event_ts}|{quantity}|{price}|purchase"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 class ImprovedPurchaseProducer:
@@ -89,7 +95,17 @@ class ImprovedPurchaseProducer:
                 'event_ts': int(event_ts.timestamp() * 1000),  # milliseconds
                 'item_id': int(row['Item ID']),
                 'price': float(price),
-                'quantity': quantity
+                'quantity': quantity,
+                'event_type': 'purchase',
+                'event_id': make_event_id(
+                    int(row['Session ID']),
+                    int(row['Item ID']),
+                    int(event_ts.timestamp() * 1000),
+                    quantity,
+                    float(price)
+                ),
+                'ingest_ts': int(time.time() * 1000),
+                'source': 'producer_purchases'
             }
 
             revenue = price * quantity
@@ -202,6 +218,18 @@ class ImprovedPurchaseProducer:
     def send_event(self, event, original_row=None):
         """Send a single purchase event to Kafka (Avro). On failure -> DLQ."""
         try:
+            event.setdefault('event_type', 'purchase')
+            event.setdefault('ingest_ts', int(time.time() * 1000))
+            event.setdefault('source', 'producer_purchases')
+            if not event.get('event_id'):
+                event['event_id'] = make_event_id(
+                    int(event['session_id']),
+                    int(event['item_id']),
+                    int(event['event_ts']),
+                    int(event['quantity']),
+                    float(event['price'])
+                )
+
             revenue = int(event['price'] * event['quantity'])
             key = str(event['session_id']).encode('utf-8')
 

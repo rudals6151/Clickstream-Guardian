@@ -8,6 +8,7 @@ import time
 import json
 import logging
 import random
+import hashlib
 from datetime import datetime
 from confluent_kafka import Producer
 
@@ -27,6 +28,11 @@ def _get_first(row: dict, keys: list[str]):
         if k in row and row[k] not in (None, ''):
             return row[k]
     return None
+
+
+def make_event_id(session_id: int, item_id: int, event_ts: int, event_type: str) -> str:
+    raw = f"{session_id}|{item_id}|{event_ts}|{event_type}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 class ImprovedClickProducer:
@@ -92,7 +98,10 @@ class ImprovedClickProducer:
                 'event_ts': int(event_dt.timestamp() * 1000),  # ms
                 'item_id': int(item),
                 'category': cat if cat not in ('0', 0, None, '') else None,
-                'event_type': 'click'
+                'event_type': 'click',
+                'event_id': make_event_id(int(sid), int(item), int(event_dt.timestamp() * 1000), 'click'),
+                'ingest_ts': int(time.time() * 1000),
+                'source': 'producer_clicks'
             }
             return event
 
@@ -157,8 +166,17 @@ class ImprovedClickProducer:
                 'event_ts': current_ts + i * 10,  # 100ms -> 10ms
                 'item_id': random.randint(1, 1000),
                 'category': random.choice(['Electronics', 'Fashion', 'Books', None]),
-                'event_type': 'click'
+                'event_type': 'click',
+                'event_id': '',
+                'ingest_ts': int(time.time() * 1000),
+                'source': 'producer_clicks_anomaly'
             }
+            event['event_id'] = make_event_id(
+                event['session_id'],
+                event['item_id'],
+                event['event_ts'],
+                event['event_type']
+            )
             events.append(event)
 
         self.stats['anomalous'] += num_events
@@ -182,6 +200,16 @@ class ImprovedClickProducer:
     def send_event(self, event, original_row=None):
         """Send a single event to Kafka (Avro). On failure -> DLQ."""
         try:
+            event.setdefault('ingest_ts', int(time.time() * 1000))
+            event.setdefault('source', 'producer_clicks')
+            if not event.get('event_id'):
+                event['event_id'] = make_event_id(
+                    int(event['session_id']),
+                    int(event['item_id']),
+                    int(event['event_ts']),
+                    event.get('event_type', 'click')
+                )
+
             key = str(event['session_id']).encode('utf-8')
 
             # Serialize with Avro

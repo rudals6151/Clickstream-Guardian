@@ -35,6 +35,25 @@
       "type": "string",
       "default": "purchase",
       "doc": "Type of event, always 'purchase' for this schema"
+    },
+    {
+      "name": "event_id",
+      "type": "string",
+      "default": "",
+      "doc": "Deterministic event identifier for deduplication"
+    },
+    {
+      "name": "ingest_ts",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "default": 0,
+      "doc": "Producer-side ingestion timestamp in milliseconds"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "default": "producer",
+      "doc": "Producer source identifier"
     }
   ]
 }

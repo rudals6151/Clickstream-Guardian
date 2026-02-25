@@ -15,9 +15,9 @@ class Config:
     SCHEMA_REGISTRY_URL = os.getenv('SCHEMA_REGISTRY_URL', 'http://localhost:8081')
     
     # Topics
-    CLICKS_TOPIC = 'km.clicks.raw.v1'
-    PURCHASES_TOPIC = 'km.purchases.raw.v1'
-    DLQ_TOPIC = 'km.events.dlq.v1'
+    CLICKS_TOPIC = os.getenv('CLICKS_TOPIC', 'km.clicks.raw.v1')
+    PURCHASES_TOPIC = os.getenv('PURCHASES_TOPIC', 'km.purchases.raw.v1')
+    DLQ_TOPIC = os.getenv('DLQ_TOPIC', 'km.events.dlq.v1')
     
     # Producer settings
     PRODUCER_CONFIG = {
