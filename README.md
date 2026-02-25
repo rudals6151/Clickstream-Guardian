@@ -159,7 +159,6 @@ python scripts/failure_simulation.py --mode stop-start --down-seconds 20
 
 ## 문서
 
-- [포트폴리오 프로젝트 요약](docs/PORTFOLIO_PROJECT_SUMMARY.md)
 - [테스트 실행 리포트 (2026-02-22)](docs/TEST_EXECUTION_REPORT_2026-02-22.md)
 - [지표 요약 (2026-02-22)](docs/METRICS_SUMMARY_2026-02-22.md)
 
