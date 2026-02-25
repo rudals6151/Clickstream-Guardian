@@ -45,7 +45,6 @@ ENV/
 docker-compose.override.yml
 
 # Data (keep structure, ignore large files)
-data/*.dat
 *.csv
 *.parquet
 
@@ -72,6 +71,5 @@ tmp/
 temp/
 *.tmp
 *.pyc
-
+test.ipynb
 *.dat
-/docs

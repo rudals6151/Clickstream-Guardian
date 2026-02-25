@@ -1,19 +1,21 @@
-"""
-Configuration for FastAPI application
-"""
+"""Configuration for FastAPI application"""
 import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application settings"""
+    """Application settings loaded from environment variables"""
     
-    # Database
+    # Database (constructed from individual env vars for flexibility)
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        f"postgresql://{os.getenv('POSTGRES_USER', 'admin')}:{os.getenv('POSTGRES_PASSWORD', 'password')}@"
-        f"{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/"
-        f"{os.getenv('POSTGRES_DB', 'clickstream')}"
+        "postgresql://{user}:{password}@{host}:{port}/{db}".format(
+            user=os.getenv("POSTGRES_USER", "admin"),
+            password=os.getenv("POSTGRES_PASSWORD", "changeme"),
+            host=os.getenv("POSTGRES_HOST", "postgres"),
+            port=os.getenv("POSTGRES_PORT", "5432"),
+            db=os.getenv("POSTGRES_DB", "clickstream"),
+        )
     )
     
     # API
@@ -32,8 +34,7 @@ class Settings(BaseSettings):
     DEFAULT_PAGE_SIZE: int = 100
     MAX_PAGE_SIZE: int = 1000
     
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

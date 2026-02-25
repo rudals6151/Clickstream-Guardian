@@ -1,0 +1,43 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+
+# Data files
+data/*.dat
+*.csv
+*.parquet
+
+# Documentation
+docs/
+diagram/
+README.md
+
+# Notebooks
+*.ipynb
+.ipynb_checkpoints
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.coverage
+htmlcov
+.pytest_cache
