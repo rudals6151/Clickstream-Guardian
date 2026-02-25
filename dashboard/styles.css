@@ -1,0 +1,126 @@
+:root {
+  --bg: #f6f8fc;
+  --panel: #ffffff;
+  --panel-2: #f1f5f9;
+  --border: rgba(15,23,42,0.10);
+  --text: #0f172a;
+  --muted: #475569;
+  --accent: #2563eb;
+  --accent2: #7c3aed;
+  --good: #16a34a;
+  --warn: #f59e0b;
+  --bad:  #dc2626;
+}
+
+/* Page background */
+.stApp {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%) !important;
+  color: var(--text);
+}
+
+/* Main container */
+.main .block-container {
+  padding-top: 1.2rem;
+  padding-bottom: 2rem;
+}
+
+/* Hide Streamlit chrome */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+  background: #ffffff !important;
+  border-right: 1px solid var(--border);
+}
+section[data-testid="stSidebar"] * {
+  color: var(--text);
+}
+
+/* Header */
+.cg-header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, #e0e7ff, #f5f3ff);
+  border-radius: 18px;
+  box-shadow: 0 10px 25px rgba(15,23,42,0.08);
+  margin-bottom: 18px;
+}
+.cg-title {
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+.cg-subtitle {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.cg-badge {
+  font-size: 0.85rem;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+/* Cards */
+.cg-card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+}
+.cg-kpi-title {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.cg-kpi-value {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+.cg-kpi-help {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 6px;
+}
+
+/* Section header */
+.cg-section {
+  margin-top: 18px;
+  margin-bottom: 10px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.cg-section h2, .cg-section h3 {
+  margin: 0;
+}
+
+/* Inputs */
+div[data-baseweb="select"] > div,
+input, textarea {
+  background: #ffffff !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Dataframe */
+div[data-testid="stDataFrame"] {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Plotly chart container */
+div[data-testid="stPlotlyChart"] > div {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 8px;
+}
