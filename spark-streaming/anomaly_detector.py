@@ -1,8 +1,4 @@
 """
-docker logs -f spark-streaming-anomaly
-"""
-
-"""
 Real-time Anomaly Detection using Spark Structured Streaming
 
 This job monitors click events from Kafka and detects anomalous sessions
@@ -15,14 +11,18 @@ import sys
 import logging
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
-from pyspark.sql.window import Window
+from pyspark.sql.functions import (
+    col, count, lit, when, length, trim, sha2,
+    concat_ws, window, min, max, current_timestamp,
+    unix_timestamp, expr, to_json, struct,
+    approx_count_distinct,
+)
+from pyspark.sql.types import StructType, StructField, StringType, LongType
 import psycopg2
 from psycopg2.extras import execute_values
 
 from common.kafka_utils import get_click_schema, get_kafka_options
-from common.postgres_utils import get_postgres_properties, upsert_to_postgres
+from common.postgres_utils import get_postgres_properties, append_to_postgres
 
 
 # Configure logging
@@ -55,7 +55,7 @@ class AnomalyDetector:
         logger.info("Spark session initialized")
         
         # Anomaly detection thresholds
-        # ADJUSTED: 임계값을 낮춰서 테스트 용이하게 (50 -> 20)
+        # Adjusted threshold for easier testing (originally 50 -> 20)
         self.HIGH_FREQUENCY_THRESHOLD = 50  # clicks in 10 seconds
         self.BOT_LIKE_THRESHOLD = 50  # clicks in 1 minute (100 -> 50)
         self.LOW_DIVERSITY_RATIO = 0.1  # unique items / total clicks
@@ -70,8 +70,8 @@ class AnomalyDetector:
             group_id="anomaly-detector"
         )
         
-        # CRITICAL FIX: startingOffsets를 "latest"로 변경하여 현재 시간의 데이터부터 읽기
-        # "earliest"는 과거 모든 데이터를 읽어서 watermark 처리가 복잡해짐
+        # Use "latest" to start from current data (not historical)
+        # "earliest" would read all past data, complicating watermark handling
         kafka_options["startingOffsets"] = "latest"
         
         return self.spark \
@@ -87,7 +87,7 @@ class AnomalyDetector:
         from pyspark.sql.avro.functions import from_avro as avro_from_avro
         
         # Avro schema string for clicks (MUST match producer schema exactly)
-        # NOTE: timestamp-millis logical type은 Spark에서 long으로 읽히므로 수동 변환 필요
+        # NOTE: Avro timestamp-millis logical type is read as long in Spark, requires manual conversion
         avro_schema = """{
             "type": "record",
             "name": "ClickEvent",
@@ -114,8 +114,8 @@ class AnomalyDetector:
             col("timestamp").alias("kafka_ingest_ts")
         ).select("data.*", "kafka_ingest_ts")
         
-        # CRITICAL FIX: event_ts를 long(milliseconds)에서 timestamp로 명시적 변환
-        # Avro logical type이 자동 변환되지 않는 경우가 있음
+        # Explicitly convert event_ts from long (milliseconds) to timestamp
+        # Avro logical type may not be auto-converted in all cases
         clicks_df = clicks_df.withColumn(
             "event_ts",
             (col("event_ts") / 1000).cast("timestamp")
@@ -147,7 +147,7 @@ class AnomalyDetector:
         # Filter out null rows (deserialization failures)
         clicks_df = clicks_df.filter(col("session_id").isNotNull())
         
-        # 디버깅을 위한 샘플 출력
+        # Sample output for debugging
         logger.info("Sample parsed events:")
         
         return clicks_df
@@ -193,9 +193,9 @@ class AnomalyDetector:
         """
         logger.info("Setting up high frequency detection...")
         
-        # CRITICAL FIX: Watermark 제거 - append 모드에서는 watermark가 없어도 작동
-        # event_ts와 kafka arrival time의 차이로 인해 watermark가 데이터를 drop함
-        # 실시간 스트리밍에서는 watermark 없이도 충분히 작동 가능
+        # Removed watermark — append mode works without it for this use case
+        # The gap between event_ts and kafka arrival time was causing data drops
+        # Real-time streaming works sufficiently without watermark here
         
         # 10-second tumbling window aggregation
         high_frequency = clicks_df \
@@ -387,7 +387,7 @@ class AnomalyDetector:
                 raise
         
         # Write stream using foreachBatch
-        # CRITICAL FIX: update 모드 사용 (watermark 없이는 append 불가)
+        # Use update mode (append not supported without watermark)
         query = df \
             .writeStream \
             .outputMode(output_mode) \
@@ -400,7 +400,7 @@ class AnomalyDetector:
     
     def write_to_console(self, df, query_name="console"):
         """Write to console for debugging"""
-        # CRITICAL FIX: complete 모드로 변경하여 모든 윈도우 결과 확인
+        # Use complete mode to see all window results
         query = df \
             .writeStream \
             .outputMode("complete") \
@@ -430,7 +430,7 @@ class AnomalyDetector:
             .withWatermark("event_ts", f"{self.late_threshold_minutes} minutes") \
             .dropDuplicates(["event_id"])
         
-        # DEBUGGING: 먼저 원본 데이터가 제대로 들어오는지 확인
+        # DEBUG: Verify raw data is arriving correctly
         logger.info("Setting up raw data console output for debugging...")
         raw_query = deduped_clicks \
             .writeStream \
@@ -448,7 +448,7 @@ class AnomalyDetector:
         late_query = self.write_late_events_to_kafka(late_clicks)
         
         # Write high frequency anomalies to PostgreSQL
-        # CRITICAL FIX: update 모드로 변경 (watermark 없으면 append 불가)
+        # Use update mode (append not possible without watermark)
         query1 = self.write_to_postgres(
             high_frequency_anomalies,
             output_mode="update"

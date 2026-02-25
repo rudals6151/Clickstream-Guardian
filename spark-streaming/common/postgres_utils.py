@@ -13,7 +13,7 @@ def get_postgres_properties(host=None, port=None, database=None, user=None, pass
     port = int(port or os.getenv("POSTGRES_PORT", "5432"))
     database = database or os.getenv("POSTGRES_DB", "clickstream")
     user = user or os.getenv("POSTGRES_USER", "admin")
-    password = password or os.getenv("POSTGRES_PASSWORD", "password")
+    password = password or os.getenv("POSTGRES_PASSWORD", "changeme")
 
     return {
         "url": f"jdbc:postgresql://{host}:{port}/{database}",
@@ -25,15 +25,19 @@ def get_postgres_properties(host=None, port=None, database=None, user=None, pass
     }
 
 
-def upsert_to_postgres(batch_df, batch_id, table_name, key_columns, postgres_props):
+def append_to_postgres(batch_df, batch_id, table_name, key_columns, postgres_props):
     """
-    Upsert data to PostgreSQL
+    Append data to PostgreSQL (foreachBatch sink).
+
+    Note: This uses simple append mode. For true upsert with
+    ON CONFLICT handling, use a custom psycopg2 write function
+    (see AnomalyDetector.write_to_postgres for an example).
     
     Args:
         batch_df: DataFrame to write
         batch_id: Batch ID from foreachBatch
         table_name: Target table name
-        key_columns: List of key columns for upsert
+        key_columns: List of key columns (reserved for future upsert logic)
         postgres_props: PostgreSQL connection properties
     """
     if batch_df.count() == 0:
