@@ -4,6 +4,7 @@ Analyzes conversion funnel from view to purchase
 """
 import sys
 import logging
+import os
 from datetime import datetime
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
@@ -122,9 +123,9 @@ class SessionFunnelAnalyzer:
         import psycopg2
         
         postgres_props = {
-            "url": "jdbc:postgresql://postgres:5432/clickstream",
-            "user": "admin",
-            "password": "password",
+            "url": f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'clickstream')}",
+            "user": os.getenv("POSTGRES_USER", "admin"),
+            "password": os.getenv("POSTGRES_PASSWORD", "password"),
             "driver": "org.postgresql.Driver"
         }
         
@@ -138,14 +139,14 @@ class SessionFunnelAnalyzer:
         logger.info(f"Deleting existing data for {self.target_date}...")
         try:
             conn = psycopg2.connect(
-                host="postgres",
-                port=5432,
-                database="clickstream",
-                user="admin",
-                password="password"
+                host=os.getenv("POSTGRES_HOST", "postgres"),
+                port=int(os.getenv("POSTGRES_PORT", "5432")),
+                database=os.getenv("POSTGRES_DB", "clickstream"),
+                user=os.getenv("POSTGRES_USER", "admin"),
+                password=os.getenv("POSTGRES_PASSWORD", "password")
             )
             cursor = conn.cursor()
-            cursor.execute(f"DELETE FROM session_funnel WHERE metric_date = '{self.target_date}'")
+            cursor.execute("DELETE FROM session_funnel WHERE metric_date = %s", (self.target_date,))
             deleted_count = cursor.rowcount
             conn.commit()
             cursor.close()

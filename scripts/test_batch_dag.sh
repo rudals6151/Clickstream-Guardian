@@ -118,7 +118,8 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     done
     echo ""
   else
-    echo -e "${BLUE}[$(date +'%H:%M:%S')] Waiting for DAG to start... ($((ELAPSED))s elapsed)${NC}
+    echo -e "${BLUE}[$(date +'%H:%M:%S')] Waiting for DAG to start... ($((ELAPSED))s elapsed)${NC}"
+  fi
   
   sleep $INTERVAL
   ELAPSED=$((ELAPSED + INTERVAL))

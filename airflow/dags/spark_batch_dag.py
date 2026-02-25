@@ -1,12 +1,17 @@
 """
 Spark Batch Processing DAG
-Runs daily batch jobs for clickstream analytics using docker exec to spark-master
+Runs daily batch jobs for clickstream analytics using SparkSubmitOperator.
 """
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.bash import BashOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.operators.dummy import DummyOperator
-from airflow.utils.dates import days_ago
+
+SPARK_PACKAGES = ",".join([
+    "org.postgresql:postgresql:42.6.0",
+    "org.apache.hadoop:hadoop-aws:3.3.4",
+    "com.amazonaws:aws-java-sdk-bundle:1.12.367",
+])
 
 # Default arguments
 default_args = {
@@ -35,42 +40,48 @@ with DAG(
     )
 
     # Task 1: Daily Metrics
-    daily_metrics = BashOperator(
+    daily_metrics = SparkSubmitOperator(
         task_id='daily_metrics',
-        bash_command='''
-        docker exec spark-master /opt/spark/bin/spark-submit \
-          --master spark://spark-master:7077 \
-          --deploy-mode client \
-          --driver-memory 2g \
-          --executor-memory 2g \
-          /opt/spark-batch/daily_metrics.py {{ (logical_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}
-        ''',
+        application='/opt/airflow/spark-batch/daily_metrics.py',
+        conn_id='spark_default',
+        application_args=["{{ (logical_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}"],
+        packages=SPARK_PACKAGES,
+        conf={
+            'spark.master': 'spark://spark-master:7077',
+            'spark.submit.deployMode': 'client',
+        },
+        driver_memory='2g',
+        executor_memory='2g',
     )
 
     # Task 2: Popular Items Analysis
-    popular_items = BashOperator(
+    popular_items = SparkSubmitOperator(
         task_id='popular_items',
-        bash_command='''
-        docker exec spark-master /opt/spark/bin/spark-submit \
-          --master spark://spark-master:7077 \
-          --deploy-mode client \
-          --driver-memory 2g \
-          --executor-memory 2g \
-          /opt/spark-batch/popular_items.py {{ (logical_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}
-        ''',
+        application='/opt/airflow/spark-batch/popular_items.py',
+        conn_id='spark_default',
+        application_args=["{{ (logical_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}"],
+        packages=SPARK_PACKAGES,
+        conf={
+            'spark.master': 'spark://spark-master:7077',
+            'spark.submit.deployMode': 'client',
+        },
+        driver_memory='2g',
+        executor_memory='2g',
     )
 
     # Task 3: Session Funnel Analysis
-    session_funnel = BashOperator(
+    session_funnel = SparkSubmitOperator(
         task_id='session_funnel',
-        bash_command='''
-        docker exec spark-master /opt/spark/bin/spark-submit \
-          --master spark://spark-master:7077 \
-          --deploy-mode client \
-          --driver-memory 2g \
-          --executor-memory 2g \
-          /opt/spark-batch/session_funnel.py {{ (logical_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}
-        ''',
+        application='/opt/airflow/spark-batch/session_funnel.py',
+        conn_id='spark_default',
+        application_args=["{{ (logical_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}"],
+        packages=SPARK_PACKAGES,
+        conf={
+            'spark.master': 'spark://spark-master:7077',
+            'spark.submit.deployMode': 'client',
+        },
+        driver_memory='2g',
+        executor_memory='2g',
     )
 
     # End dummy operator
