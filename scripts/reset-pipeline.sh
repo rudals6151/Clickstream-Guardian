@@ -44,6 +44,10 @@ docker exec kafka-1 kafka-topics --delete \
   --bootstrap-server kafka-1:29092 \
   --topic km.events.dlq.v1 2>/dev/null || echo "   ⚠️  Topic km.events.dlq.v1 not found (OK)"
 
+docker exec kafka-1 kafka-topics --delete \
+  --bootstrap-server kafka-1:29092 \
+  --topic km.events.late.v1 2>/dev/null || echo "   ⚠️  Topic km.events.late.v1 not found (OK)"
+
 # 토픽이 완전히 삭제될 때까지 대기
 sleep 3
 
@@ -59,6 +63,12 @@ docker exec kafka-1 kafka-topics --create \
 docker exec kafka-1 kafka-topics --create \
   --bootstrap-server kafka-1:29092 \
   --topic km.events.dlq.v1 \
+  --partitions 1 \
+  --replication-factor 2
+
+docker exec kafka-1 kafka-topics --create \
+  --bootstrap-server kafka-1:29092 \
+  --topic km.events.late.v1 \
   --partitions 1 \
   --replication-factor 2
 
