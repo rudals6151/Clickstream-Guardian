@@ -10,7 +10,7 @@ RUN pip3 install --no-cache-dir \
     pyspark==3.5.0 \
     kafka-python==2.0.2 \
     confluent-kafka==2.3.0 \
-    avro-python3==1.10.2 \
+    apache-avro>=1.11.0 \
     psycopg2-binary==2.9.9 \
     boto3==1.34.0
 
