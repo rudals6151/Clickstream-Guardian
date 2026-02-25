@@ -6,10 +6,12 @@ FastAPI application for serving clickstream analytics and anomaly detection resu
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import logging
+import os
 
 from config import settings
-from routers import anomaly, metrics, sessions
+from routers import anomaly, metrics, items
 from models.database import get_db_connection
 
 
@@ -21,13 +23,38 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Manage application startup and shutdown."""
+    # Startup
+    logger.info("=" * 60)
+    logger.info(f"Starting {settings.API_TITLE} v{settings.API_VERSION}")
+    db_host = settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "unknown"
+    logger.info(f"Database host: {db_host}")
+    logger.info("=" * 60)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT version()")
+                version = cur.fetchone()[0]
+                logger.info(f"Database connected: {version}")
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Clickstream Guardian API")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.API_TITLE,
     version=settings.API_VERSION,
     description=settings.API_DESCRIPTION,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 
@@ -44,7 +71,7 @@ app.add_middleware(
 # Include routers
 app.include_router(anomaly.router)
 app.include_router(metrics.router)
-app.include_router(sessions.router)
+app.include_router(items.router)
 
 
 @app.get("/", tags=["root"])
@@ -82,7 +109,7 @@ def health_check():
         logger.error(f"Health check failed: {e}")
         raise HTTPException(
             status_code=503,
-            detail=f"Service unhealthy: {str(e)}"
+            detail="Service unhealthy: database connection failed"
         )
 
 
@@ -129,33 +156,6 @@ async def global_exception_handler(request, exc):
     )
 
 
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Startup event handler"""
-    logger.info("="*60)
-    logger.info(f"Starting {settings.API_TITLE} v{settings.API_VERSION}")
-    logger.info(f"Database: {settings.DATABASE_URL.split('@')[1]}")
-    logger.info("="*60)
-    
-    # Test database connection
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT version()")
-                version = cur.fetchone()[0]
-                logger.info(f"✅ Database connected: {version}")
-    except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
-
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Shutdown event handler"""
-    logger.info("Shutting down Clickstream Guardian API")
-
-
 if __name__ == "__main__":
     import uvicorn
     
@@ -163,6 +163,6 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=os.getenv("DEBUG", "false").lower() == "true",
         log_level="info"
     )

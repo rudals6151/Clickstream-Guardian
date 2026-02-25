@@ -110,7 +110,7 @@ def get_anomaly_timeline(
                 COUNT(DISTINCT session_id) as unique_sessions,
                 AVG(anomaly_score) as avg_score
             FROM anomaly_sessions
-            WHERE detected_at >= NOW() - INTERVAL '%s hours'
+            WHERE detected_at >= NOW() - (%s * INTERVAL '1 hour')
             GROUP BY DATE_TRUNC('hour', detected_at)
             ORDER BY hour DESC
         """
