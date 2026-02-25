@@ -13,10 +13,13 @@ based on patterns like:
 """
 import sys
 import logging
+import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from pyspark.sql.window import Window
+import psycopg2
+from psycopg2.extras import execute_values
 
 from common.kafka_utils import get_click_schema, get_kafka_options
 from common.postgres_utils import get_postgres_properties, upsert_to_postgres
@@ -37,6 +40,8 @@ class AnomalyDetector:
                  checkpoint_location="/tmp/spark-checkpoint/anomaly"):
         self.kafka_servers = kafka_servers
         self.checkpoint_location = checkpoint_location
+        self.late_topic = os.getenv("LATE_EVENTS_TOPIC", "km.events.late.v1")
+        self.late_threshold_minutes = int(os.getenv("LATE_EVENT_THRESHOLD_MINUTES", "10"))
         
         # Initialize Spark Session
         self.spark = SparkSession.builder \
@@ -92,7 +97,10 @@ class AnomalyDetector:
                 {"name": "event_ts", "type": "long"},
                 {"name": "item_id", "type": "long"},
                 {"name": "category", "type": ["null", "string"], "default": null},
-                {"name": "event_type", "type": "string"}
+                {"name": "event_type", "type": "string"},
+                {"name": "event_id", "type": "string", "default": ""},
+                {"name": "ingest_ts", "type": "long", "default": 0},
+                {"name": "source", "type": "string", "default": "producer"}
             ]
         }"""
         
@@ -103,14 +111,37 @@ class AnomalyDetector:
                 expr("substring(value, 6, length(value))"),  # Skip first 5 bytes
                 avro_schema
             ).alias("data"),
-            col("timestamp").alias("kafka_timestamp")
-        ).select("data.*", "kafka_timestamp")
+            col("timestamp").alias("kafka_ingest_ts")
+        ).select("data.*", "kafka_ingest_ts")
         
         # CRITICAL FIX: event_ts를 long(milliseconds)에서 timestamp로 명시적 변환
         # Avro logical type이 자동 변환되지 않는 경우가 있음
         clicks_df = clicks_df.withColumn(
             "event_ts",
             (col("event_ts") / 1000).cast("timestamp")
+        )
+
+        clicks_df = clicks_df.withColumn(
+            "ingest_ts",
+            when(col("ingest_ts") > 0, (col("ingest_ts") / 1000).cast("timestamp"))
+            .otherwise(col("kafka_ingest_ts"))
+        )
+
+        clicks_df = clicks_df.withColumn(
+            "event_id",
+            when(
+                col("event_id").isNull() | (length(trim(col("event_id"))) == 0),
+                sha2(
+                    concat_ws(
+                        "|",
+                        col("session_id").cast("string"),
+                        col("item_id").cast("string"),
+                        col("event_ts").cast("string"),
+                        col("event_type")
+                    ),
+                    256
+                )
+            ).otherwise(col("event_id"))
         )
         
         # Filter out null rows (deserialization failures)
@@ -120,6 +151,40 @@ class AnomalyDetector:
         logger.info("Sample parsed events:")
         
         return clicks_df
+
+    def split_late_events(self, clicks_df):
+        """Split stream into on-time and too-late events."""
+        threshold_expr = expr(f"current_timestamp() - interval {self.late_threshold_minutes} minutes")
+
+        late_events = clicks_df.filter(col("event_ts") < threshold_expr)
+        on_time_events = clicks_df.filter(col("event_ts") >= threshold_expr)
+        return on_time_events, late_events
+
+    def write_late_events_to_kafka(self, late_df):
+        """Route late events to a dedicated Kafka late-events topic."""
+        payload = late_df.select(
+            col("event_id").cast("string").alias("key"),
+            to_json(
+                struct(
+                    col("event_id"),
+                    col("session_id"),
+                    col("item_id"),
+                    col("event_type"),
+                    col("event_ts"),
+                    col("kafka_ingest_ts"),
+                    lit("too_late").alias("reason")
+                )
+            ).alias("value")
+        )
+
+        return payload.writeStream \
+            .format("kafka") \
+            .option("kafka.bootstrap.servers", self.kafka_servers) \
+            .option("topic", self.late_topic) \
+            .option("checkpointLocation", f"{self.checkpoint_location}/late_events") \
+            .outputMode("append") \
+            .trigger(processingTime='10 seconds') \
+            .start()
     
     def detect_high_frequency(self, clicks_df):
         """
@@ -132,7 +197,7 @@ class AnomalyDetector:
         # event_ts와 kafka arrival time의 차이로 인해 watermark가 데이터를 drop함
         # 실시간 스트리밍에서는 watermark 없이도 충분히 작동 가능
         
-        # 10-second tumbling window aggregation (NO WATERMARK)
+        # 10-second tumbling window aggregation
         high_frequency = clicks_df \
             .groupBy(
                 window("event_ts", "10 seconds"),
@@ -142,7 +207,8 @@ class AnomalyDetector:
                 count("*").alias("click_count"),
                 approx_count_distinct("item_id").alias("unique_items"),
                 min("event_ts").alias("window_start"),
-                max("event_ts").alias("window_end")
+                max("event_ts").alias("window_end"),
+                max("kafka_ingest_ts").alias("kafka_ingest_ts")
             ) \
             .filter(col("click_count") > self.HIGH_FREQUENCY_THRESHOLD) \
             .withColumn("anomaly_type", lit("HIGH_FREQUENCY")) \
@@ -150,8 +216,25 @@ class AnomalyDetector:
                 "anomaly_score",
                 col("click_count") / lit(self.HIGH_FREQUENCY_THRESHOLD)
             ) \
-            .withColumn("detected_at", current_timestamp()) \
+            .withColumn("detected_at", col("window_end")) \
+            .withColumn("spark_process_ts", current_timestamp()) \
+            .withColumn(
+                "event_id",
+                sha2(
+                    concat_ws(
+                        "|",
+                        col("session_id").cast("string"),
+                        col("window_start").cast("string"),
+                        lit("HIGH_FREQUENCY")
+                    ),
+                    256
+                )
+            ) \
+            .withColumn("source", lit("spark_streaming")) \
+            .withColumn("event_ts", (unix_timestamp(col("window_start")) * 1000).cast("long")) \
             .select(
+                "event_id",
+                "event_ts",
                 "session_id",
                 "detected_at",
                 "window_start",
@@ -159,7 +242,10 @@ class AnomalyDetector:
                 "click_count",
                 "unique_items",
                 "anomaly_score",
-                "anomaly_type"
+                "anomaly_type",
+                "kafka_ingest_ts",
+                "spark_process_ts",
+                "source"
             )
         
         return high_frequency
@@ -217,6 +303,9 @@ class AnomalyDetector:
     def write_to_postgres(self, df, output_mode="update"):
         """Write anomalies to PostgreSQL"""
         postgres_props = get_postgres_properties()
+        jdbc_url = postgres_props["url"].replace("jdbc:", "")
+        db_user = postgres_props["user"]
+        db_password = postgres_props["password"]
         
         def write_batch(batch_df, batch_id):
             """Batch write function"""
@@ -229,16 +318,69 @@ class AnomalyDetector:
                 # Show sample for debugging
                 logger.info(f"Batch {batch_id}: Detected {cnt} anomalies")
                 batch_df.show(5, truncate=False)
-                
-                # Write to PostgreSQL
-                batch_df.write \
-                    .format("jdbc") \
-                    .options(**postgres_props) \
-                    .option("dbtable", "anomaly_sessions") \
-                    .mode("append") \
-                    .save()
-                
-                logger.info(f"Batch {batch_id}: Successfully written to database")
+
+                rows = batch_df.select(
+                    "event_id",
+                    "event_ts",
+                    "session_id",
+                    "detected_at",
+                    "window_start",
+                    "window_end",
+                    "click_count",
+                    "unique_items",
+                    "anomaly_score",
+                    "anomaly_type",
+                    "kafka_ingest_ts",
+                    "spark_process_ts",
+                    "source"
+                ).dropDuplicates(["event_id"]).collect()
+
+                values = [
+                    (
+                        row["event_id"],
+                        row["event_ts"],
+                        row["session_id"],
+                        row["detected_at"],
+                        row["window_start"],
+                        row["window_end"],
+                        row["click_count"],
+                        row["unique_items"],
+                        float(row["anomaly_score"]),
+                        row["anomaly_type"],
+                        row["kafka_ingest_ts"],
+                        row["spark_process_ts"],
+                        row["source"]
+                    )
+                    for row in rows
+                ]
+
+                with psycopg2.connect(jdbc_url, user=db_user, password=db_password) as conn:
+                    with conn.cursor() as cur:
+                        execute_values(
+                            cur,
+                            """
+                            INSERT INTO anomaly_sessions (
+                                event_id, event_ts, session_id, detected_at, window_start, window_end,
+                                click_count, unique_items, anomaly_score, anomaly_type,
+                                kafka_ingest_ts, spark_process_ts, source
+                            )
+                            VALUES %s
+                            ON CONFLICT (session_id, window_start, anomaly_type, detected_at)
+                            DO UPDATE SET
+                                click_count = EXCLUDED.click_count,
+                                unique_items = EXCLUDED.unique_items,
+                                anomaly_score = EXCLUDED.anomaly_score,
+                                kafka_ingest_ts = EXCLUDED.kafka_ingest_ts,
+                                spark_process_ts = EXCLUDED.spark_process_ts,
+                                source = EXCLUDED.source,
+                                db_write_ts = CURRENT_TIMESTAMP,
+                                updated_at = CURRENT_TIMESTAMP
+                            """,
+                            values
+                        )
+                    conn.commit()
+
+                logger.info(f"Batch {batch_id}: Upserted {len(values)} rows to database")
                 
             except Exception as e:
                 logger.error(f"Batch {batch_id}: Failed to write: {e}")
@@ -282,10 +424,15 @@ class AnomalyDetector:
         
         # Parse events
         clicks_df = self.parse_events(kafka_stream)
+
+        on_time_clicks, late_clicks = self.split_late_events(clicks_df)
+        deduped_clicks = on_time_clicks \
+            .withWatermark("event_ts", f"{self.late_threshold_minutes} minutes") \
+            .dropDuplicates(["event_id"])
         
         # DEBUGGING: 먼저 원본 데이터가 제대로 들어오는지 확인
         logger.info("Setting up raw data console output for debugging...")
-        raw_query = clicks_df \
+        raw_query = deduped_clicks \
             .writeStream \
             .outputMode("append") \
             .format("console") \
@@ -296,7 +443,9 @@ class AnomalyDetector:
             .start()
         
         # High frequency detection
-        high_frequency_anomalies = self.detect_high_frequency(clicks_df)
+        high_frequency_anomalies = self.detect_high_frequency(deduped_clicks)
+
+        late_query = self.write_late_events_to_kafka(late_clicks)
         
         # Write high frequency anomalies to PostgreSQL
         # CRITICAL FIX: update 모드로 변경 (watermark 없으면 append 불가)
@@ -322,10 +471,11 @@ class AnomalyDetector:
         
         # Wait for termination
         try:
-            query1.awaitTermination()
+            self.spark.streams.awaitAnyTermination()
         except KeyboardInterrupt:
             logger.info("Stopping anomaly detection job...")
             raw_query.stop()
+            late_query.stop()
             query1.stop()
             if enable_console:
                 query2.stop()

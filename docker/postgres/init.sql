@@ -12,6 +12,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Partitioned by detected_at date for efficient time-based queries and data management
 CREATE TABLE IF NOT EXISTS anomaly_sessions (
     id BIGSERIAL NOT NULL,
+    event_id VARCHAR(64),
+    event_ts BIGINT,
     session_id BIGINT NOT NULL,
     detected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     window_start TIMESTAMP NOT NULL,
@@ -20,6 +22,10 @@ CREATE TABLE IF NOT EXISTS anomaly_sessions (
     unique_items INTEGER NOT NULL CHECK (unique_items >= 0),
     anomaly_score FLOAT NOT NULL CHECK (anomaly_score >= 0),
     anomaly_type VARCHAR(50) NOT NULL CHECK (anomaly_type IN ('HIGH_FREQUENCY', 'BOT_LIKE', 'SPAM', 'OTHER')),
+    kafka_ingest_ts TIMESTAMP,
+    spark_process_ts TIMESTAMP,
+    db_write_ts TIMESTAMP,
+    source VARCHAR(100),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, detected_at)
     -- Note: UNIQUE constraint removed due to partitioning requirements
@@ -37,10 +43,12 @@ CREATE INDEX IF NOT EXISTS idx_anomaly_detected_at ON anomaly_sessions(detected_
 CREATE INDEX IF NOT EXISTS idx_anomaly_type ON anomaly_sessions(anomaly_type);
 CREATE INDEX IF NOT EXISTS idx_anomaly_score ON anomaly_sessions(anomaly_score DESC);
 CREATE INDEX IF NOT EXISTS idx_anomaly_window ON anomaly_sessions(window_start, window_end);
+CREATE INDEX IF NOT EXISTS idx_anomaly_event_id ON anomaly_sessions(event_id);
 
 -- Composite index for duplicate detection (replaces UNIQUE constraint)
 -- This helps application-level duplicate prevention without enforcing database constraint
-CREATE INDEX IF NOT EXISTS idx_anomaly_dedup ON anomaly_sessions(session_id, window_start, anomaly_type, detected_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_anomaly_dedup_unique
+ON anomaly_sessions(session_id, window_start, anomaly_type, detected_at);
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -202,6 +210,22 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_name ON pipeline_runs(pipeline_name);
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_date ON pipeline_runs(run_date DESC);
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status ON pipeline_runs(status);
+
+-- Alert History Table (for DLQ alert deduplication)
+CREATE TABLE IF NOT EXISTS alert_history (
+    id SERIAL PRIMARY KEY,
+    alert_hash VARCHAR(128) NOT NULL,
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('WARNING', 'CRITICAL')),
+    topic_name VARCHAR(200) NOT NULL,
+    partition_offsets JSONB,
+    message TEXT,
+    notified_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    time_bucket TIMESTAMP NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_history_hash_bucket
+ON alert_history(alert_hash, time_bucket);
+CREATE INDEX IF NOT EXISTS idx_alert_history_notified_at ON alert_history(notified_at DESC);
 
 -- ============================================================================
 -- VIEWS FOR COMMON QUERIES

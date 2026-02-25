@@ -2,13 +2,19 @@
 PostgreSQL utilities for Spark Streaming
 """
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
 
-def get_postgres_properties(host="postgres", port=5432, database="clickstream", 
-                            user="admin", password="password"):
+def get_postgres_properties(host=None, port=None, database=None, user=None, password=None):
     """Get PostgreSQL JDBC properties"""
+    host = host or os.getenv("POSTGRES_HOST", "postgres")
+    port = int(port or os.getenv("POSTGRES_PORT", "5432"))
+    database = database or os.getenv("POSTGRES_DB", "clickstream")
+    user = user or os.getenv("POSTGRES_USER", "admin")
+    password = password or os.getenv("POSTGRES_PASSWORD", "password")
+
     return {
         "url": f"jdbc:postgresql://{host}:{port}/{database}",
         "user": user,
