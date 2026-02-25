@@ -28,7 +28,7 @@ class Config:
         'max.in.flight.requests.per.connection': 5,
         'retries': 3,
         'retry.backoff.ms': 100,
-        'enable.idempotence': True  # 중복 메시지 방지 (Exactly-once delivery)
+        'enable.idempotence': True  # Prevent duplicate messages (exactly-once delivery)
     }
     
     # Data paths

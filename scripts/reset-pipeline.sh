@@ -1,5 +1,4 @@
 #!/bin/bash
-# cd /c/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/scripts && bash reset-pipeline.sh
 
 ################################################################################
 # Clickstream Pipeline Reset Script

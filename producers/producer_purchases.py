@@ -1,19 +1,15 @@
 """
-cd c:/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/producers
-python producer_purchases.py
-"""
+Kafka Producer for Purchase Events
 
-"""
-Kafka Producer for Purchase Events (Improved)
-- Sorts events by timestamp for realistic replay
-- Enhanced logging for monitoring
-- DLQ for parse/serialize/produce failures
-- Stable poll cadence based on produce-call counts
+Features:
+    - Sorts events by timestamp for realistic replay
+    - Enhanced logging for monitoring
+    - DLQ for parse/serialize/produce failures
+    - Stable poll cadence based on produce-call counts
+    - Revenue tracking via delivery callbacks
 
-FIXED:
-- Revenue in progress log increases naturally with 'sent' by accumulating revenue
-  ONLY on successful delivery callback (on_delivery).
-- No 'opaque' usage (not supported by confluent_kafka-python).
+Usage:
+    python producer_purchases.py --file ../data/yoochoose-buys-sorted.dat
 """
 
 import csv
@@ -21,7 +17,7 @@ import time
 import json
 import logging
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from confluent_kafka import Producer
 
 from common.config import Config
@@ -87,7 +83,7 @@ class ImprovedPurchaseProducer:
         try:
             event_ts = datetime.fromisoformat(row['Timestamp'].replace('Z', '+00:00'))
 
-            price = int(row['Price'])
+            price = float(row['Price'])
             quantity = int(row['Quantity'])
 
             event = {
@@ -122,7 +118,7 @@ class ImprovedPurchaseProducer:
                 'source_topic': self.topic,
                 'stage': stage,
                 'error': str(error_msg),
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'original_data': original,
                 'event': event
             }

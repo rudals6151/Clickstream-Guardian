@@ -1,6 +1,8 @@
 """
-cd c:/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/producers
-python producer_clicks.py --file ../data/yoochoose-clicks-sorted.dat --anomaly-interval 10
+Kafka Producer for Click Events
+
+Usage:
+    python producer_clicks.py --file ../data/yoochoose-clicks-sorted.dat --anomaly-interval 10
 """
 
 import csv
@@ -9,7 +11,7 @@ import json
 import logging
 import random
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from confluent_kafka import Producer
 
 from common.config import Config
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_first(row: dict, keys: list[str]):
-    """row에서 가능한 키들 중 첫 번째로 존재/값있는 것을 반환"""
+    """Return the first non-empty value from the row for the given keys."""
     for k in keys:
         if k in row and row[k] not in (None, ''):
             return row[k]
@@ -80,7 +82,7 @@ class ImprovedClickProducer:
     def parse_row(self, row):
         """
         Parse CSV row to event dictionary.
-        원본 데이터 컬럼명이 케이스/이름이 다른 경우도 대비해서 키 fallback 포함.
+        Supports multiple column name variants for flexibility.
         """
         try:
             ts_str = _get_first(row, ['Timestamp', 'timestamp', 'event_ts', 'EventTs', 'eventTs'])
@@ -117,7 +119,7 @@ class ImprovedClickProducer:
                 'source_topic': self.topic,
                 'stage': stage,
                 'error': str(error_msg),
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'original_data': original,
                 'event': event
             }
@@ -158,8 +160,8 @@ class ImprovedClickProducer:
         current_ts = int(time.time() * 1000)
 
         events = []
-        # CRITICAL FIX: 간격을 10ms로 줄여서 더 밀집된 이상 세션 생성
-        # 50개 이벤트 = 500ms, 100개 = 1초 안에 모두 발생
+        # Reduce interval to 10ms for denser anomaly session generation
+        # 50 events = 500ms, 100 events = 1 second total
         for i in range(num_events):
             event = {
                 'session_id': anomaly_session_id,
@@ -265,10 +267,10 @@ class ImprovedClickProducer:
 
     def produce_with_anomalies(self, csv_path, max_events=None, anomaly_interval=60):
         """
-        STREAMING producer:
-        - 파일을 한 줄씩 읽으며 즉시 produce (대용량 로딩 제거)
-        - 첫 이벤트 timestamp를 기준으로 time_offset을 계산해 현재 시간대로 shift
-        - replay_speed는 '원본 timestamp 간격' 기준으로 sleep
+        Streaming producer with anomaly injection.
+        - Reads file line by line and produces immediately (no bulk loading)
+        - Computes time_offset from first event timestamp to shift to current time
+        - Replay speed controls sleep between events based on original timestamp gaps
         """
         logger.info("=" * 80)
         logger.info("🎬 Starting STREAMING producer with ANOMALY INJECTION + DLQ + CURRENT TIMESTAMPS")
@@ -286,7 +288,7 @@ class ImprovedClickProducer:
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
 
-            # (중요) 첫 유효 이벤트를 만나면 offset 계산
+            # Calculate time offset from the first valid event
             for row in reader:
                 event = self.parse_row(row)
                 if not event:
@@ -298,8 +300,8 @@ class ImprovedClickProducer:
                 time_offset = current_time_ms - first_event_ts
 
                 logger.info(f"⏰ Time offset: +{time_offset/1000:.0f} seconds (shifting to current time)")
-                # 첫 이벤트도 처리해야 하니까, 아래 루프로 “첫 이벤트 포함” 처리
-                # 현재 row/event를 루프 처리로 넘기기 위해 break 후 별도 처리
+                # Process first event separately, then continue in the loop below
+                # Break here to handle the first row outside the inner loop
                 first_row = row
                 first_event = event
                 break
@@ -307,14 +309,14 @@ class ImprovedClickProducer:
                 logger.error("❌ No valid events found in file!")
                 return
 
-            # ---- 첫 이벤트 처리 ----
+            # ---- Process first event ----
             original_ts = first_event['event_ts']
             first_event['event_ts'] = original_ts + time_offset
             self.send_event(first_event, original_row=first_row)
             produced += 1
             prev_original_ts = original_ts
 
-            # ---- 나머지 이벤트 스트리밍 처리 ----
+            # ---- Stream remaining events ----
             for row in reader:
                 if max_events and produced >= max_events:
                     break
@@ -324,7 +326,7 @@ class ImprovedClickProducer:
                     self.send_to_dlq(original=row, error_msg="Failed to parse row", stage="parse")
                     continue
 
-                # anomaly injection (real time 기준)
+                # Anomaly injection (based on real-time interval)
                 now_rt = time.time()
                 if now_rt - last_anomaly_real_time >= anomaly_interval:
                     logger.warning(f"\n{'='*80}")
@@ -344,7 +346,7 @@ class ImprovedClickProducer:
                 self.send_event(event, original_row=row)
                 produced += 1
 
-                # replay speed control (원본 간격 기준)
+                # Replay speed control (based on original event interval)
                 if prev_original_ts is not None and self.replay_speed < 100:
                     delay = (original_ts - prev_original_ts) / 1000.0 / self.replay_speed
                     if delay > 0:

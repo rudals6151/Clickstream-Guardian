@@ -1,17 +1,15 @@
 """
-전처리 스크립트: CSV 파일을 타임스탬프 순으로 정렬하여 저장
+Preprocessing Script: Sort CSV files by timestamp
 
-사용법:
-    cd c:/Users/USER/Desktop/bootcamp/project/Clickstream-Guardian/data
+Usage:
     python preprocess_data.py
 """
 import csv
-import sys
 from datetime import datetime
 
 
 def sort_csv_by_timestamp(input_file, output_file, timestamp_column='Timestamp'):
-    """CSV 파일을 타임스탬프 순으로 정렬"""
+    """Sort a CSV file by the specified timestamp column."""
     print(f"📖 Loading {input_file}...")
     
     rows = []

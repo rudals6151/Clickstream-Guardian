@@ -21,7 +21,7 @@ def main() -> int:
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         database=os.getenv("POSTGRES_DB", "clickstream"),
         user=os.getenv("POSTGRES_USER", "admin"),
-        password=os.getenv("POSTGRES_PASSWORD", "password"),
+        password=os.getenv("POSTGRES_PASSWORD", "changeme"),
         cursor_factory=RealDictCursor,
     )
 
