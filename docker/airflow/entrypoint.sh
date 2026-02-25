@@ -13,12 +13,12 @@ if [ "$1" = "webserver" ] || [ "$1" = "scheduler" ]; then
     if [ "$1" = "webserver" ]; then
         echo "Creating admin user..."
         airflow users create \
-            --username admin \
+            --username "${AIRFLOW_ADMIN_USER:-admin}" \
             --firstname Admin \
             --lastname User \
             --role Admin \
-            --email admin@example.com \
-            --password admin 2>/dev/null || true
+            --email "${AIRFLOW_ADMIN_EMAIL:-admin@example.com}" \
+            --password "${AIRFLOW_ADMIN_PASSWORD:-admin}" 2>/dev/null || true
     fi
 fi
 

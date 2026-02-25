@@ -166,16 +166,16 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: clickstream
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-clickstream}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - clickstream-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d clickstream"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-clickstream}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -267,15 +267,15 @@ services:
     hostname: airflow-db
     container_name: airflow-db
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
+      POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
     volumes:
       - airflow-db-data:/var/lib/postgresql/data
     networks:
       - clickstream-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER:-airflow}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -293,13 +293,31 @@ services:
       - "8082:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
-      - AIRFLOW__CORE__FERNET_KEY=REDACTED_FERNET_KEY
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__WEBSERVER__SECRET_KEY=REDACTED_WEBSERVER_SECRET
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW_ADMIN_USER=${AIRFLOW_ADMIN_USER:-admin}
+      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-admin}
+      - AIRFLOW_ADMIN_EMAIL=${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-clickstream}
+      - KAFKA_INTERNAL_SERVERS=${KAFKA_INTERNAL_SERVERS:-kafka-1:29092,kafka-2:29093,kafka-3:29094}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - EMAIL_SENDER=${EMAIL_SENDER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_RECIPIENT=${EMAIL_RECIPIENT}
+      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-smtp.gmail.com}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-587}
+      - DLQ_WARNING_THRESHOLD=${DLQ_WARNING_THRESHOLD:-1}
+      - DLQ_CRITICAL_THRESHOLD=${DLQ_CRITICAL_THRESHOLD:-20}
+      - DLQ_SUPPRESS_MINUTES=${DLQ_SUPPRESS_MINUTES:-10}
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../airflow/plugins:/opt/airflow/plugins
@@ -321,13 +339,28 @@ services:
       - airflow-webserver
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
-      - AIRFLOW__CORE__FERNET_KEY=REDACTED_FERNET_KEY
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db/${AIRFLOW_DB_NAME:-airflow}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__WEBSERVER__SECRET_KEY=REDACTED_WEBSERVER_SECRET
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-clickstream}
+      - KAFKA_INTERNAL_SERVERS=${KAFKA_INTERNAL_SERVERS:-kafka-1:29092,kafka-2:29093,kafka-3:29094}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - EMAIL_SENDER=${EMAIL_SENDER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_RECIPIENT=${EMAIL_RECIPIENT}
+      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-smtp.gmail.com}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-587}
+      - DLQ_WARNING_THRESHOLD=${DLQ_WARNING_THRESHOLD:-1}
+      - DLQ_CRITICAL_THRESHOLD=${DLQ_CRITICAL_THRESHOLD:-20}
+      - DLQ_SUPPRESS_MINUTES=${DLQ_SUPPRESS_MINUTES:-10}
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - ../airflow/plugins:/opt/airflow/plugins
@@ -350,7 +383,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://admin:REDACTED@postgres:5432/clickstream
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-clickstream}}
     networks:
       - clickstream-net
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
