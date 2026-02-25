@@ -1,21 +1,21 @@
 # Clickstream Guardian
-½Ç½Ã°£ Å¬¸¯½ºÆ®¸² ÀÌ»ó Å½Áö¿Í ÀÏÀÏ KPI Áı°è¸¦ ÅëÇÕÇÑ E2E µ¥ÀÌÅÍ ÆÄÀÌÇÁ¶óÀÎ ÇÁ·ÎÁ§Æ®
+ì‹¤ì‹œê°„ í´ë¦­ìŠ¤íŠ¸ë¦¼ ì´ìƒ íƒì§€ì™€ ì¼ì¼ KPI ì§‘ê³„ë¥¼ í†µí•©í•œ E2E ë°ì´í„° íŒŒì´í”„ë¼ì¸ í”„ë¡œì íŠ¸
 
 ## Why
-- ÇØ°áÇÏ·Á´ø ¹®Á¦: Áõ°¡ÇÏ´Â Æ®·¡ÇÈ È¯°æ¿¡¼­ ÀÌ»ó ÀÌº¥Æ®¸¦ ½Ç½Ã°£À¸·Î Å½ÁöÇÏ°í, Àå¾Ö »óÈ²¿¡¼­µµ µ¥ÀÌÅÍ À¯½Ç ¾øÀÌ ¿î¿µ Ç°ÁúÀ» º¸Àå
-- Å¸°Ù »ç¿ëÀÚ: µ¥ÀÌÅÍ ¿£Áö´Ï¾î, ¹é¿£µå ¿£Áö´Ï¾î, µ¥ÀÌÅÍ ÇÃ·§Æû ¿î¿µÀÚ
-- ÇÙ½É Á¦¾à: ·ÎÄÃ È¯°æ ÀçÇö °¡´É¼º, Àå¾Ö/Áö¿¬/Áßº¹ ÀÌº¥Æ® ´ëÀÀ, ¿î¿µ ÁöÇ¥(SLO)·Î Ç°Áú Áõ¸í
+- í•´ê²°í•˜ë ¤ë˜ ë¬¸ì œ: ì¦ê°€í•˜ëŠ” íŠ¸ë˜í”½ í™˜ê²½ì—ì„œ ì´ìƒ ì´ë²¤íŠ¸ë¥¼ ì‹¤ì‹œê°„ìœ¼ë¡œ íƒì§€í•˜ê³ , ì¥ì•  ìƒí™©ì—ì„œë„ ë°ì´í„° ìœ ì‹¤ ì—†ì´ ìš´ì˜ í’ˆì§ˆì„ ë³´ì¥
+- íƒ€ê²Ÿ ì‚¬ìš©ì: ë°ì´í„° ì—”ì§€ë‹ˆì–´, ë°±ì—”ë“œ ì—”ì§€ë‹ˆì–´, ë°ì´í„° í”Œë«í¼ ìš´ì˜ì
+- í•µì‹¬ ì œì•½: ë¡œì»¬ í™˜ê²½ ì¬í˜„ ê°€ëŠ¥ì„±, ì¥ì• /ì§€ì—°/ì¤‘ë³µ ì´ë²¤íŠ¸ ëŒ€ì‘, ìš´ì˜ ì§€í‘œ(SLO)ë¡œ í’ˆì§ˆ ì¦ëª…
 
 ## What
-- ÁÖ¿ä ±â´É(5~7°³):
-  - Kafka ±â¹İ Å¬¸¯½ºÆ®¸² ÀÌº¥Æ® ¼öÁı (3 Broker ±¸¼º)
-  - Spark Structured Streaming ½Ç½Ã°£ ÀÌ»ó ¼¼¼Ç Å½Áö
-  - Airflow + Spark Batch ÀÏÀÏ KPI Áı°è ÀÚµ¿È­
-  - FastAPI Á¶È¸ API ¹× Streamlit ´ë½Ãº¸µå Á¦°ø
-  - DLQ ¸ğ´ÏÅÍ¸µ ¹× Slack/Email ¾Ë¸² Ã¼°è
-  - Àå¾Ö ÁÖÀÔ/ºÎÇÏ Å×½ºÆ®/½º¸ğÅ© Å×½ºÆ® ½ºÅ©¸³Æ® Á¦°ø
-  - SLO ¸®Æ÷Æ® »ı¼ºÀ¸·Î Áö¿¬ ±¸°£º° ¼º´É ÃøÁ¤
-- ½ºÅ©¸°¼¦/µ¥¸ğ GIF:
+- ì£¼ìš” ê¸°ëŠ¥(5~7ê°œ):
+  - Kafka ê¸°ë°˜ í´ë¦­ìŠ¤íŠ¸ë¦¼ ì´ë²¤íŠ¸ ìˆ˜ì§‘ (3 Broker êµ¬ì„±)
+  - Spark Structured Streaming ì‹¤ì‹œê°„ ì´ìƒ ì„¸ì…˜ íƒì§€
+  - Airflow + Spark Batch ì¼ì¼ KPI ì§‘ê³„ ìë™í™”
+  - FastAPI ì¡°íšŒ API ë° Streamlit ëŒ€ì‹œë³´ë“œ ì œê³µ
+  - DLQ ëª¨ë‹ˆí„°ë§ ë° Slack/Email ì•Œë¦¼ ì²´ê³„
+  - ì¥ì•  ì£¼ì…/ë¶€í•˜ í…ŒìŠ¤íŠ¸/ìŠ¤ëª¨í¬ í…ŒìŠ¤íŠ¸ ìŠ¤í¬ë¦½íŠ¸ ì œê³µ
+  - SLO ë¦¬í¬íŠ¸ ìƒì„±ìœ¼ë¡œ ì§€ì—° êµ¬ê°„ë³„ ì„±ëŠ¥ ì¸¡ì •
+- ìŠ¤í¬ë¦°ìƒ·/ë°ëª¨ GIF:
   - Architecture: ![Architecture](diagram/Diagram.png)
 
 ## How
@@ -26,41 +26,41 @@
   - Data Contract: Avro, Schema Registry
   - Infra: Docker Compose
   - Validation: Locust, smoke/failure/SLO scripts
-- Architecture (Âª°Ô):
+- Architecture (ì§§ê²Œ):
   - Producer -> Kafka -> Spark Streaming -> PostgreSQL -> FastAPI/Streamlit
-  - Kafka Connect -> MinIO(S3) raw parquet ÀúÀå
-  - Airflow DAG -> Spark Batch -> KPI Å×ÀÌºí ÀûÀç
+  - Kafka Connect -> MinIO(S3) raw parquet ì €ì¥
+  - Airflow DAG -> Spark Batch -> KPI í…Œì´ë¸” ì ì¬
   - DLQ Topic -> Airflow Sensor -> Slack/Email Alert
-- Key decisions (3°³):
-  - ³»±¸¼º ¿ì¼± Kafka ¼³Á¤: `acks=all`, `enable.idempotence=true`, replication factor 2
-  - ÀÌº¥Æ® Á¤ÇÕ¼º º¸Àå: `event_id`, `event_ts`, `ingest_ts` ±â¹İ Áö¿¬/Áßº¹ ´ëÀÀ ¹× upsert Àü·«
-  - ¿î¿µ ÀÚµ¿È­: DLQ ÀÓ°èÄ¡ ±â¹İ °æº¸¿Í `alert_history`·Î Áßº¹ ¾Ë¸² ¹æÁö
+- Key decisions (3ê°œ):
+  - ë‚´êµ¬ì„± ìš°ì„  Kafka ì„¤ì •: `acks=all`, `enable.idempotence=true`, replication factor 2
+  - ì´ë²¤íŠ¸ ì •í•©ì„± ë³´ì¥: `event_id`, `event_ts`, `ingest_ts` ê¸°ë°˜ ì§€ì—°/ì¤‘ë³µ ëŒ€ì‘ ë° upsert ì „ëµ
+  - ìš´ì˜ ìë™í™”: DLQ ì„ê³„ì¹˜ ê¸°ë°˜ ê²½ë³´ì™€ `alert_history`ë¡œ ì¤‘ë³µ ì•Œë¦¼ ë°©ì§€
 
 ## Getting Started
 - Requirements:
   - Docker Desktop
   - Python 3.10+
-  - Bash ½ÇÇà È¯°æ (Git Bash/WSL)
+  - Bash ì‹¤í–‰ í™˜ê²½ (Git Bash/WSL)
 - Install:
   - `cp .env.example .env`
-  - `.env`ÀÇ `POSTGRES_*`, `AIRFLOW__*`, `AWS_*` °ª È®ÀÎ
+  - `.env`ì˜ `POSTGRES_*`, `AIRFLOW__*`, `AWS_*` ê°’ í™•ì¸
 - Run:
   - `docker compose -f docker/docker-compose.yml build airflow-webserver airflow-scheduler`
   - `docker compose -f docker/docker-compose.yml up -d`
-  - (¼±ÅÃ) `bash scripts/apply_migration.sh`
+  - (ì„ íƒ) `bash scripts/apply_migration.sh`
 - Test:
-  - ½º¸ğÅ© Å×½ºÆ®: `bash scripts/run_local_smoke.sh`
-  - API ºÎÇÏ Å×½ºÆ®: `python -m locust -f scripts/load_test.py --host http://localhost:8000 --headless -u 15 -r 5 -t 20s --only-summary`
-  - Àå¾Ö ÁÖÀÔ Å×½ºÆ®: `python scripts/failure_simulation.py --mode stop-start --down-seconds 20`
+  - ìŠ¤ëª¨í¬ í…ŒìŠ¤íŠ¸: `bash scripts/run_local_smoke.sh`
+  - API ë¶€í•˜ í…ŒìŠ¤íŠ¸: `python -m locust -f scripts/load_test.py --host http://localhost:8000 --headless -u 15 -r 5 -t 20s --only-summary`
+  - ì¥ì•  ì£¼ì… í…ŒìŠ¤íŠ¸: `python scripts/failure_simulation.py --mode stop-start --down-seconds 20`
 
 ## Quality
 - Tests:
-  - API ½º¸ğÅ© Å×½ºÆ® ¹× ¿£µåÆ÷ÀÎÆ® »óÅÂ °ËÁõ (`scripts/run_local_smoke.sh`, `scripts/smoke_test.py`)
-  - ºÎÇÏ Å×½ºÆ®(Locust), Àå¾Ö ÁÖÀÔ Å×½ºÆ®, Ã³¸®·® Å×½ºÆ® ½ºÅ©¸³Æ® Á¦°ø
+  - API ìŠ¤ëª¨í¬ í…ŒìŠ¤íŠ¸ ë° ì—”ë“œí¬ì¸íŠ¸ ìƒíƒœ ê²€ì¦ (`scripts/run_local_smoke.sh`, `scripts/smoke_test.py`)
+  - ë¶€í•˜ í…ŒìŠ¤íŠ¸(Locust), ì¥ì•  ì£¼ì… í…ŒìŠ¤íŠ¸, ì²˜ë¦¬ëŸ‰ í…ŒìŠ¤íŠ¸ ìŠ¤í¬ë¦½íŠ¸ ì œê³µ
 - CI:
-  - ÇöÀç GitHub Actions ÆÄÀÌÇÁ¶óÀÎÀº ¹Ì±¸¼º
+  - í˜„ì¬ GitHub Actions íŒŒì´í”„ë¼ì¸ì€ ë¯¸êµ¬ì„±
 - Lint/Format:
-  - Àü¿ë lint/format ÀÚµ¿È­´Â ¹Ì±¸¼º (ÃßÈÄ `ruff`/`black` µµÀÔ ±ÇÀå)
+  - ì „ìš© lint/format ìë™í™”ëŠ” ë¯¸êµ¬ì„± (ì¶”í›„ `ruff`/`black` ë„ì… ê¶Œì¥)
 
 ## Links
 - Demo:
@@ -68,7 +68,7 @@
   - API Docs: `http://localhost:8000/docs`
   - Dashboard: `http://localhost:8501`
 - Portfolio Case Study:
-  - [ÇÁ·ÎÁ§Æ® ¿ä¾à](docs/PORTFOLIO_PROJECT_SUMMARY.md)
-  - [Å×½ºÆ® ½ÇÇà º¸°í¼­ (2026-02-22)](docs/TEST_EXECUTION_REPORT_2026-02-22.md)
+  - [í”„ë¡œì íŠ¸ ìš”ì•½](docs/PORTFOLIO_PROJECT_SUMMARY.md)
+  - [í…ŒìŠ¤íŠ¸ ì‹¤í–‰ ë³´ê³ ì„œ (2026-02-22)](docs/TEST_EXECUTION_REPORT_2026-02-22.md)
 - PR highlights:
-  - ÇÙ½É º¯°æ»çÇ× Á¤¸® ¿¹Á¤ (¾÷µ¥ÀÌÆ® ¿¹Á¤)
+  - í•µì‹¬ ë³€ê²½ì‚¬í•­ ì •ë¦¬ ì˜ˆì • (ì—…ë°ì´íŠ¸ ì˜ˆì •)
