@@ -128,7 +128,7 @@ def get_trending_items(
                 SUM(revenue) as total_revenue,
                 ROUND(AVG(rank)::numeric, 1) as avg_rank
             FROM popular_items
-            WHERE metric_date >= CURRENT_DATE - INTERVAL '%s days'
+            WHERE metric_date >= CURRENT_DATE - (%s * INTERVAL '1 day')
             GROUP BY item_id, category
             ORDER BY total_revenue DESC
             LIMIT %s

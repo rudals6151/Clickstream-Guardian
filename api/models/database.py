@@ -6,6 +6,7 @@ from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from config import settings
 import logging
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +16,12 @@ def get_db_connection():
     """Get database connection with context manager"""
     conn = None
     try:
-        # Parse DATABASE_URL
-        db_url = settings.DATABASE_URL.replace("postgresql://", "")
-        user_pass, host_db = db_url.split("@")
-        user, password = user_pass.split(":")
-        host_port, database = host_db.split("/")
-        host, port = host_port.split(":") if ":" in host_port else (host_port, "5432")
+        parsed = urlparse(settings.DATABASE_URL)
+        user = parsed.username
+        password = parsed.password
+        host = parsed.hostname or "postgres"
+        port = parsed.port or 5432
+        database = (parsed.path or "/clickstream").lstrip("/")
         
         conn = psycopg2.connect(
             host=host,

@@ -167,7 +167,7 @@ def get_summary(days: int = Query(7, ge=1, le=90), db=Depends(get_db)):
                 SUM(total_revenue)::bigint as total_revenue,
                 ROUND(AVG(avg_clicks_per_session)::numeric, 2)::float as avg_clicks_per_session
             FROM daily_metrics
-            WHERE metric_date >= CURRENT_DATE - INTERVAL '%s days'
+            WHERE metric_date >= CURRENT_DATE - (%s * INTERVAL '1 day')
         """
         
         with db.cursor() as cur:

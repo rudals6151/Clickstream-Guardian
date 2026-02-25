@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://admin:REDACTED@postgres:5432/clickstream"
+        f"postgresql://{os.getenv('POSTGRES_USER', 'admin')}:{os.getenv('POSTGRES_PASSWORD', 'password')}@"
+        f"{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/"
+        f"{os.getenv('POSTGRES_DB', 'clickstream')}"
     )
     
     # API
@@ -20,7 +22,11 @@ class Settings(BaseSettings):
     API_DESCRIPTION: str = "Real-time anomaly detection and batch analytics API"
     
     # CORS
-    CORS_ORIGINS: list = ["*"]
+    CORS_ORIGINS: list[str] = [
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+        if origin.strip()
+    ]
     
     # Pagination
     DEFAULT_PAGE_SIZE: int = 100
