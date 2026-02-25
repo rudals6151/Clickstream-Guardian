@@ -7,8 +7,11 @@ import logging
 import os
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
+from pyspark.sql.functions import (
+    col, count, countDistinct, sum, avg, max, min, when, lit,
+    current_timestamp,
+)
+from pyspark.sql.types import StructType, StructField, LongType
 
 from common.s3_utils import configure_s3_spark, get_s3_path
 
@@ -149,16 +152,9 @@ class DailyMetricsCalculator:
         return result
     
     def write_to_postgres(self, df):
-        """Write metrics to PostgreSQL"""
+        """Write metrics to PostgreSQL (atomic delete + insert)"""
         from pyspark.sql.functions import current_timestamp
-        import psycopg2
-        
-        postgres_props = {
-            "url": f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'clickstream')}",
-            "user": os.getenv("POSTGRES_USER", "admin"),
-            "password": os.getenv("POSTGRES_PASSWORD", "password"),
-            "driver": "org.postgresql.Driver"
-        }
+        from common.postgres_utils import atomic_write
         
         logger.info("Writing metrics to PostgreSQL...")
         
@@ -166,40 +162,11 @@ class DailyMetricsCalculator:
         df_with_ts = df.withColumn("created_at", current_timestamp()) \
                        .withColumn("updated_at", current_timestamp())
         
-        # Show metrics before writing
         logger.info("=== METRICS DATA (before writing) ===")
         df_with_ts.show(truncate=False)
         
-        # Delete existing data for this date using psycopg2
-        logger.info(f"Deleting existing data for {self.target_date}...")
-        try:
-            conn = psycopg2.connect(
-                host=os.getenv("POSTGRES_HOST", "postgres"),
-                port=int(os.getenv("POSTGRES_PORT", "5432")),
-                database=os.getenv("POSTGRES_DB", "clickstream"),
-                user=os.getenv("POSTGRES_USER", "admin"),
-                password=os.getenv("POSTGRES_PASSWORD", "password")
-            )
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM daily_metrics WHERE metric_date = %s", (self.target_date,))
-            deleted_count = cursor.rowcount
-            conn.commit()
-            cursor.close()
-            conn.close()
-            logger.info(f"Deleted {deleted_count} rows for {self.target_date}")
-        except Exception as e:
-            logger.warning(f"Error deleting existing data: {e}")
-        
-        # Append new data
-        logger.info("Appending new data to PostgreSQL...")
-        df_with_ts.write \
-            .format("jdbc") \
-            .options(**postgres_props) \
-            .option("dbtable", "daily_metrics") \
-            .mode("append") \
-            .save()
-        
-        logger.info("✅ Metrics written successfully")
+        atomic_write(df_with_ts, "daily_metrics", self.target_date)
+        logger.info("Metrics written successfully")
 
     
     def run(self):

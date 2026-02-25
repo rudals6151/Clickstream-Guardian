@@ -7,8 +7,11 @@ import logging
 import os
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
+from pyspark.sql.functions import (
+    col, count, countDistinct, sum, when, lit, greatest,
+    current_timestamp,
+)
+from pyspark.sql.types import StructType, StructField, LongType, StringType, DoubleType
 from pyspark.sql.window import Window
 
 from common.s3_utils import configure_s3_spark, get_s3_path
@@ -118,16 +121,9 @@ class SessionFunnelAnalyzer:
         return funnel_df
     
     def write_to_postgres(self, df):
-        """Write funnel data to PostgreSQL"""
+        """Write funnel data to PostgreSQL (atomic delete + insert)"""
         from pyspark.sql.functions import current_timestamp
-        import psycopg2
-        
-        postgres_props = {
-            "url": f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'clickstream')}",
-            "user": os.getenv("POSTGRES_USER", "admin"),
-            "password": os.getenv("POSTGRES_PASSWORD", "password"),
-            "driver": "org.postgresql.Driver"
-        }
+        from common.postgres_utils import atomic_write
         
         logger.info("Writing funnel data to PostgreSQL...")
         
@@ -135,36 +131,8 @@ class SessionFunnelAnalyzer:
         df_with_ts = df.withColumn("created_at", current_timestamp())
         df_with_ts.show(truncate=False)
         
-        # Delete existing data for this date using psycopg2
-        logger.info(f"Deleting existing data for {self.target_date}...")
-        try:
-            conn = psycopg2.connect(
-                host=os.getenv("POSTGRES_HOST", "postgres"),
-                port=int(os.getenv("POSTGRES_PORT", "5432")),
-                database=os.getenv("POSTGRES_DB", "clickstream"),
-                user=os.getenv("POSTGRES_USER", "admin"),
-                password=os.getenv("POSTGRES_PASSWORD", "password")
-            )
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM session_funnel WHERE metric_date = %s", (self.target_date,))
-            deleted_count = cursor.rowcount
-            conn.commit()
-            cursor.close()
-            conn.close()
-            logger.info(f"Deleted {deleted_count} rows for {self.target_date}")
-        except Exception as e:
-            logger.warning(f"Error deleting existing data: {e}")
-        
-        # Append new data
-        logger.info("Appending new data to PostgreSQL...")
-        df_with_ts.write \
-            .format("jdbc") \
-            .options(**postgres_props) \
-            .option("dbtable", "session_funnel") \
-            .mode("append") \
-            .save()
-        
-        logger.info("✅ Funnel data written successfully")
+        atomic_write(df_with_ts, "session_funnel", self.target_date)
+        logger.info("Funnel data written successfully")
     
     def run(self):
         """Execute funnel analysis"""

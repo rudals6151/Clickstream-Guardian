@@ -7,7 +7,10 @@ import logging
 import os
 from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
+from pyspark.sql.functions import (
+    col, count, countDistinct, sum, when, lit, row_number,
+    current_timestamp,
+)
 from pyspark.sql.window import Window
 
 from common.s3_utils import configure_s3_spark, get_s3_path
@@ -182,88 +185,27 @@ class PopularItemsAnalyzer:
         return top_categories
     
     def write_to_postgres(self, items_df, categories_df):
-        """Write results to PostgreSQL"""
+        """Write results to PostgreSQL (atomic delete + insert)"""
         from pyspark.sql.functions import current_timestamp
-        import psycopg2
-        
-        postgres_props = {
-            "url": f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'clickstream')}",
-            "user": os.getenv("POSTGRES_USER", "admin"),
-            "password": os.getenv("POSTGRES_PASSWORD", "password"),
-            "driver": "org.postgresql.Driver"
-        }
+        from common.postgres_utils import atomic_write
         
         logger.info("Writing popular items to PostgreSQL...")
         
-        # Add created_at column to items (9 columns total: 8 data + created_at)
+        # Add created_at column to items
         items_with_ts = items_df.withColumn("created_at", current_timestamp())
         items_with_ts.show(20, truncate=False)
         
-        # Delete existing data for this date using psycopg2
-        logger.info(f"Deleting existing popular_items for {self.target_date}...")
-        try:
-            conn = psycopg2.connect(
-                host=os.getenv("POSTGRES_HOST", "postgres"),
-                port=int(os.getenv("POSTGRES_PORT", "5432")),
-                database=os.getenv("POSTGRES_DB", "clickstream"),
-                user=os.getenv("POSTGRES_USER", "admin"),
-                password=os.getenv("POSTGRES_PASSWORD", "password")
-            )
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM popular_items WHERE metric_date = %s", (self.target_date,))
-            deleted_items = cursor.rowcount
-            conn.commit()
-            cursor.close()
-            conn.close()
-            logger.info(f"Deleted {deleted_items} rows from popular_items for {self.target_date}")
-        except Exception as e:
-            logger.warning(f"Error deleting popular_items: {e}")
-        
-        # Append new data (coalesce to 1 partition to avoid duplicate key errors)
-        logger.info("Appending new popular_items data...")
-        items_with_ts.coalesce(1).write \
-            .format("jdbc") \
-            .options(**postgres_props) \
-            .option("dbtable", "popular_items") \
-            .mode("append") \
-            .save()
+        atomic_write(items_with_ts, "popular_items", self.target_date, coalesce=1)
         
         logger.info("Writing popular categories to PostgreSQL...")
         
-        # Add created_at column to categories (8 columns total: 7 data + created_at)
+        # Add created_at column to categories
         categories_with_ts = categories_df.withColumn("created_at", current_timestamp())
         categories_with_ts.show(20, truncate=False)
         
-        # Delete existing data for this date using psycopg2
-        logger.info(f"Deleting existing popular_categories for {self.target_date}...")
-        try:
-            conn = psycopg2.connect(
-                host=os.getenv("POSTGRES_HOST", "postgres"),
-                port=int(os.getenv("POSTGRES_PORT", "5432")),
-                database=os.getenv("POSTGRES_DB", "clickstream"),
-                user=os.getenv("POSTGRES_USER", "admin"),
-                password=os.getenv("POSTGRES_PASSWORD", "password")
-            )
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM popular_categories WHERE metric_date = %s", (self.target_date,))
-            deleted_categories = cursor.rowcount
-            conn.commit()
-            cursor.close()
-            conn.close()
-            logger.info(f"Deleted {deleted_categories} rows from popular_categories for {self.target_date}")
-        except Exception as e:
-            logger.warning(f"Error deleting popular_categories: {e}")
+        atomic_write(categories_with_ts, "popular_categories", self.target_date, coalesce=1)
         
-        # Append new data (coalesce to 1 partition to avoid duplicate key errors)
-        logger.info("Appending new popular_categories data...")
-        categories_with_ts.coalesce(1).write \
-            .format("jdbc") \
-            .options(**postgres_props) \
-            .option("dbtable", "popular_categories") \
-            .mode("append") \
-            .save()
-        
-        logger.info("✅ Popular items/categories written successfully")
+        logger.info("Popular items/categories written successfully")
     
     def run(self):
         """Execute popular items analysis"""
