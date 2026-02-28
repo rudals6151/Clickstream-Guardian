@@ -1,0 +1,55 @@
+{
+  "type": "record",
+  "name": "AnomalyEvent",
+  "namespace": "com.clickstream.guardian",
+  "doc": "Schema for detected anomaly events",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "long",
+      "doc": "Unique identifier for the anomalous session"
+    },
+    {
+      "name": "detected_at",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Timestamp when the anomaly was detected"
+    },
+    {
+      "name": "window_start",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Start of the detection window"
+    },
+    {
+      "name": "window_end",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "End of the detection window"
+    },
+    {
+      "name": "click_count",
+      "type": "int",
+      "doc": "Number of clicks in the window"
+    },
+    {
+      "name": "unique_items",
+      "type": "int",
+      "doc": "Number of unique items clicked"
+    },
+    {
+      "name": "anomaly_score",
+      "type": "float",
+      "doc": "Anomaly score (higher = more anomalous)"
+    },
+    {
+      "name": "anomaly_type",
+      "type": {
+        "type": "enum",
+        "name": "AnomalyType",
+        "symbols": ["HIGH_FREQUENCY", "BOT_LIKE", "SPAM", "OTHER"]
+      },
+      "doc": "Type of detected anomaly"
+    }
+  ]
+}

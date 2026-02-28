@@ -102,6 +102,26 @@ services:
     networks:
       - clickstream-net
 
+  # Kafka Topic 초기화 (one-shot)
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+    networks:
+      - clickstream-net
+    entrypoint: >
+      /bin/bash -c "
+      echo 'Creating Kafka topics...';
+      kafka-topics --create --if-not-exists --topic km.clicks.raw.v1     --partitions 3 --replication-factor 2 --bootstrap-server kafka-1:29092;
+      kafka-topics --create --if-not-exists --topic km.purchases.raw.v1  --partitions 3 --replication-factor 2 --bootstrap-server kafka-1:29092;
+      kafka-topics --create --if-not-exists --topic km.events.dlq.v1     --partitions 1 --replication-factor 2 --bootstrap-server kafka-1:29092;
+      kafka-topics --create --if-not-exists --topic km.events.late.v1    --partitions 1 --replication-factor 2 --bootstrap-server kafka-1:29092;
+      echo 'Topics created:';
+      kafka-topics --list --bootstrap-server kafka-1:29092;
+      "
+
   # Schema Registry
   schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
@@ -157,6 +177,8 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
       - ./connectors:/etc/kafka-connect/scripts
       - ../connectors:/etc/kafka-connect/connectors
@@ -172,8 +194,8 @@ services:
       - bash
       - -c
       - |
-        /etc/confluent/docker/run &
-        bash /etc/kafka-connect/scripts/init-connectors.sh
+        bash /etc/kafka-connect/scripts/init-connectors.sh &
+        /etc/confluent/docker/run
 
   # PostgreSQL
   postgres:
@@ -265,6 +287,8 @@ services:
         condition: service_started
       kafka-3:
         condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     environment:

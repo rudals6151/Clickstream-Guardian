@@ -30,6 +30,8 @@
     "errors.deadletterqueue.topic.replication.factor": "2",
     "errors.deadletterqueue.context.headers.enable": "true",
     "store.kafka.max.retries": "3",
+    "store.url": "http://minio:9000",
+    "s3.path.style.access": "true",
     "aws.access.key.id": "${AWS_ACCESS_KEY_ID}",
     "aws.secret.access.key": "${AWS_SECRET_ACCESS_KEY}"
   }

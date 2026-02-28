@@ -73,3 +73,6 @@ temp/
 *.pyc
 test.ipynb
 *.dat
+
+# Personal notes (not for git)
+INTERVIEW_PREP.md

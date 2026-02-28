@@ -1,0 +1,55 @@
+{
+  "type": "record",
+  "name": "ClickEvent",
+  "namespace": "com.clickstream.guardian",
+  "doc": "Schema for click events from e-commerce platform",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "long",
+      "doc": "Unique identifier for the user session"
+    },
+    {
+      "name": "event_ts",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Timestamp when the click occurred (milliseconds since epoch)"
+    },
+    {
+      "name": "item_id",
+      "type": "long",
+      "doc": "Unique identifier of the clicked item"
+    },
+    {
+      "name": "category",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Category of the item (S=special offer, 0=missing, 1-12=category, else=brand)"
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "default": "click",
+      "doc": "Type of event, always 'click' for this schema"
+    },
+    {
+      "name": "event_id",
+      "type": "string",
+      "default": "",
+      "doc": "Deterministic event identifier for deduplication"
+    },
+    {
+      "name": "ingest_ts",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "default": 0,
+      "doc": "Producer-side ingestion timestamp in milliseconds"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "default": "producer",
+      "doc": "Producer source identifier"
+    }
+  ]
+}
