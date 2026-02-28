@@ -13,13 +13,21 @@ import psycopg2
 logger = logging.getLogger(__name__)
 
 
+def _require_env(name: str) -> str:
+    """환경변수를 가져오되, 비밀번호 등 필수 값이 없으면 에러를 발생시킨다."""
+    value = os.getenv(name)
+    if not value:
+        raise EnvironmentError(f"필수 환경변수 '{name}'이(가) 설정되지 않았습니다.")
+    return value
+
+
 def get_postgres_properties():
     """Return JDBC properties dict used by Spark DataFrameWriter."""
     host = os.getenv("POSTGRES_HOST", "postgres")
     port = os.getenv("POSTGRES_PORT", "5432")
     database = os.getenv("POSTGRES_DB", "clickstream")
     user = os.getenv("POSTGRES_USER", "admin")
-    password = os.getenv("POSTGRES_PASSWORD", "changeme")
+    password = _require_env("POSTGRES_PASSWORD")
 
     return {
         "url": f"jdbc:postgresql://{host}:{port}/{database}",
@@ -36,7 +44,7 @@ def _psycopg2_conn():
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         database=os.getenv("POSTGRES_DB", "clickstream"),
         user=os.getenv("POSTGRES_USER", "admin"),
-        password=os.getenv("POSTGRES_PASSWORD", "changeme"),
+        password=_require_env("POSTGRES_PASSWORD"),
     )
 
 

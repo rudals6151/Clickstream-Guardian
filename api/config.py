@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         "DATABASE_URL",
         "postgresql://{user}:{password}@{host}:{port}/{db}".format(
             user=os.getenv("POSTGRES_USER", "admin"),
-            password=os.getenv("POSTGRES_PASSWORD", "changeme"),
+            password=os.getenv("POSTGRES_PASSWORD", ""),
             host=os.getenv("POSTGRES_HOST", "postgres"),
             port=os.getenv("POSTGRES_PORT", "5432"),
             db=os.getenv("POSTGRES_DB", "clickstream"),

@@ -16,12 +16,15 @@ def main() -> int:
     parser.add_argument("--hours", type=int, default=24, help="Lookback window in hours")
     args = parser.parse_args()
 
+    pg_password = os.getenv("POSTGRES_PASSWORD")
+    if not pg_password:
+        raise EnvironmentError("필수 환경변수 'POSTGRES_PASSWORD'이(가) 설정되지 않았습니다.")
     conn = psycopg2.connect(
         host=os.getenv("POSTGRES_HOST", "localhost"),
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         database=os.getenv("POSTGRES_DB", "clickstream"),
         user=os.getenv("POSTGRES_USER", "admin"),
-        password=os.getenv("POSTGRES_PASSWORD", "changeme"),
+        password=pg_password,
         cursor_factory=RealDictCursor,
     )
 

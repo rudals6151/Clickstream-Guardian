@@ -108,12 +108,15 @@ def _insert_alert_if_new(severity: str, topic: str, offsets: dict[str, int], mes
     payload = f"{severity}|{topic}|{json.dumps(offsets, sort_keys=True)}"
     alert_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
+    pg_password = os.getenv("POSTGRES_PASSWORD")
+    if not pg_password:
+        raise EnvironmentError("필수 환경변수 'POSTGRES_PASSWORD'이(가) 설정되지 않았습니다.")
     with psycopg2.connect(
         host=os.getenv("POSTGRES_HOST", "postgres"),
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         database=os.getenv("POSTGRES_DB", "clickstream"),
         user=os.getenv("POSTGRES_USER", "admin"),
-        password=os.getenv("POSTGRES_PASSWORD", "changeme"),
+        password=pg_password,
     ) as conn:
         with conn.cursor() as cur:
             cur.execute(
