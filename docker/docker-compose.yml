@@ -184,7 +184,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-clickstream}
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -232,7 +232,8 @@ services:
       dockerfile: Dockerfile
     container_name: spark-worker
     depends_on:
-      - spark-master
+      spark-master:
+        condition: service_healthy
     ports:
       - "8084:8081"
     environment:
@@ -254,12 +255,24 @@ services:
       dockerfile: Dockerfile
     container_name: spark-streaming-anomaly
     depends_on:
-      - spark-master
-      - spark-worker
-      - kafka-1
-      - kafka-2
-      - kafka-3
-      - postgres
+      spark-master:
+        condition: service_healthy
+      spark-worker:
+        condition: service_started
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_started
+      kafka-3:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:-clickstream}
     volumes:
       - ../spark-streaming:/opt/spark-streaming
       - ./schemas:/opt/schemas
@@ -267,6 +280,11 @@ services:
       - clickstream-net
     restart: unless-stopped
     user: root
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
     command:
       - bash
       - -c
@@ -329,7 +347,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-admin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-clickstream}
       - KAFKA_INTERNAL_SERVERS=${KAFKA_INTERNAL_SERVERS:-kafka-1:29092,kafka-2:29093,kafka-3:29094}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
@@ -372,7 +390,7 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-admin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-clickstream}
       - KAFKA_INTERNAL_SERVERS=${KAFKA_INTERNAL_SERVERS:-kafka-1:29092,kafka-2:29093,kafka-3:29094}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
@@ -402,13 +420,19 @@ services:
     hostname: api
     container_name: api
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-clickstream}}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-clickstream}}
     networks:
       - clickstream-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
@@ -425,19 +449,73 @@ services:
     hostname: dashboard
     container_name: dashboard
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "8501:8501"
     environment:
       - API_URL=http://api:8000
     networks:
       - clickstream-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8501/_stcore/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 15s
+
+  # MinIO (S3 호환 오브젝트 스토리지)
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    hostname: minio
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    networks:
+      - clickstream-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # MinIO 초기 버킷 생성
+  minio-init:
+    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    networks:
+      - clickstream-net
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/km-data-lake;
+      echo 'MinIO bucket km-data-lake created';
+      exit 0;
+      "
 
 volumes:
   zookeeper-data:
@@ -446,6 +524,7 @@ volumes:
   kafka-data-2:
   kafka-data-3:
   postgres-data:
+  minio-data:
   airflow-db-data:
   airflow-logs:
 
