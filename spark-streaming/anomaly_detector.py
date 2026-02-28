@@ -49,6 +49,8 @@ class AnomalyDetector:
             .config("spark.sql.streaming.schemaInference", "true") \
             .config("spark.streaming.kafka.consumer.cache.capacity", "1000") \
             .config("spark.sql.shuffle.partitions", "4") \
+            .config("spark.sql.streaming.stateStore.stateSchemaCheck", "false") \
+            .config("spark.sql.streaming.statefulOperator.checkCorrectness.enabled", "false") \
             .getOrCreate()
         
         self.spark.sparkContext.setLogLevel("WARN")
@@ -193,12 +195,13 @@ class AnomalyDetector:
         """
         logger.info("Setting up high frequency detection...")
         
-        # Removed watermark — append mode works without it for this use case
-        # The gap between event_ts and kafka arrival time was causing data drops
-        # Real-time streaming works sufficiently without watermark here
+        # Watermark를 설정하여 state 무한 증가를 방지
+        # late_threshold_minutes 이전의 이벤트는 state에서 제거됨
+        clicks_watermarked = clicks_df \
+            .withWatermark("event_ts", f"{self.late_threshold_minutes} minutes")
         
         # 10-second tumbling window aggregation
-        high_frequency = clicks_df \
+        high_frequency = clicks_watermarked \
             .groupBy(
                 window("event_ts", "10 seconds"),
                 "session_id"
@@ -270,7 +273,8 @@ class AnomalyDetector:
                 count("*").alias("click_count"),
                 approx_count_distinct("item_id").alias("unique_items"),
                 min("event_ts").alias("window_start"),
-                max("event_ts").alias("window_end")
+                max("event_ts").alias("window_end"),
+                max("kafka_ingest_ts").alias("kafka_ingest_ts")
             ) \
             .withColumn(
                 "diversity_ratio",
@@ -287,7 +291,24 @@ class AnomalyDetector:
                 (1 - col("diversity_ratio"))
             ) \
             .withColumn("detected_at", current_timestamp()) \
+            .withColumn("spark_process_ts", current_timestamp()) \
+            .withColumn(
+                "event_id",
+                sha2(
+                    concat_ws(
+                        "|",
+                        col("session_id").cast("string"),
+                        col("window_start").cast("string"),
+                        lit("BOT_LIKE")
+                    ),
+                    256
+                )
+            ) \
+            .withColumn("source", lit("spark_streaming")) \
+            .withColumn("event_ts", (unix_timestamp(col("window_start")) * 1000).cast("long")) \
             .select(
+                "event_id",
+                "event_ts",
                 "session_id",
                 "detected_at",
                 "window_start",
@@ -295,7 +316,10 @@ class AnomalyDetector:
                 "click_count",
                 "unique_items",
                 "anomaly_score",
-                "anomaly_type"
+                "anomaly_type",
+                "kafka_ingest_ts",
+                "spark_process_ts",
+                "source"
             )
         
         return bot_like
@@ -461,13 +485,13 @@ class AnomalyDetector:
                 query_name="high_frequency_console"
             )
         
-        # Bot-like detection (optional, can enable later)
-        # bot_like_anomalies = self.detect_bot_like(clicks_df)
-        # query3 = self.write_to_postgres(bot_like_anomalies, output_mode="append")
+        # Bot-like detection: 1분 윈도우에서 고빈도 + 저다양성 세션 탐지
+        bot_like_anomalies = self.detect_bot_like(deduped_clicks)
+        query3 = self.write_to_postgres(bot_like_anomalies, output_mode="append")
         
         logger.info("Anomaly detection job started successfully")
         logger.info(f"Checkpoint location: {self.checkpoint_location}")
-        logger.info("Monitoring for anomalies...")
+        logger.info("Monitoring for anomalies (HIGH_FREQUENCY + BOT_LIKE)...")
         
         # Wait for termination
         try:
@@ -477,6 +501,7 @@ class AnomalyDetector:
             raw_query.stop()
             late_query.stop()
             query1.stop()
+            query3.stop()
             if enable_console:
                 query2.stop()
             logger.info("Job stopped successfully")

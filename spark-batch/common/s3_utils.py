@@ -11,6 +11,7 @@ def configure_s3_spark(spark, endpoint=None,
     # Use AWS credentials from environment if available
     access_key = access_key or os.getenv("AWS_ACCESS_KEY_ID", "minioadmin")
     secret_key = secret_key or os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin")
+    endpoint = endpoint or os.getenv("S3_ENDPOINT", "")
     
     spark._jsc.hadoopConfiguration().set("fs.s3a.access.key", access_key)
     spark._jsc.hadoopConfiguration().set("fs.s3a.secret.key", secret_key)
@@ -23,7 +24,9 @@ def configure_s3_spark(spark, endpoint=None,
         spark._jsc.hadoopConfiguration().set("fs.s3a.connection.ssl.enabled", "false")
     else:
         # AWS S3 configuration (default)
-        spark._jsc.hadoopConfiguration().set("fs.s3a.endpoint.region", "ap-northeast-2")
+        spark._jsc.hadoopConfiguration().set(
+            "fs.s3a.endpoint.region", os.getenv("AWS_REGION", "ap-northeast-2")
+        )
         spark._jsc.hadoopConfiguration().set("fs.s3a.path.style.access", "false")
 
 
