@@ -21,6 +21,7 @@ ipython==8.18.1
 
 # Testing
 pytest==7.4.3
+pytest-cov==4.1.0
 locust==2.20.0
 
 # Utilities

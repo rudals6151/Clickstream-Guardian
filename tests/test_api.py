@@ -11,10 +11,13 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+try:
+    from fastapi.testclient import TestClient
+except ImportError:
+    pytest.skip("FastAPI가 설치되지 않아 API 테스트를 건너뜁니다", allow_module_level=True)
+
 # Ensure the api/ directory is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
-
-from fastapi.testclient import TestClient
 
 # Patch the database pool *before* importing main, because database.py
 # creates the pool at import time.
