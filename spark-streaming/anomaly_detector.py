@@ -10,6 +10,9 @@ based on patterns like:
 import sys
 import logging
 import os
+import json
+from pathlib import Path
+from urllib import request
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, count, lit, when, length, trim, sha2,
@@ -33,6 +36,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def load_click_avro_schema():
+    """Load click-event Avro schema from Schema Registry; fallback to file."""
+    schema_registry_url = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081").rstrip("/")
+    subject = os.getenv("CLICK_SCHEMA_SUBJECT", "km.clicks.raw.v1-value")
+    latest_schema_url = f"{schema_registry_url}/subjects/{subject}/versions/latest"
+
+    try:
+        req = request.Request(
+            latest_schema_url,
+            headers={"Accept": "application/vnd.schemaregistry.v1+json"},
+        )
+        with request.urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        schema_str = payload["schema"]
+        schema_id = int(payload["id"])
+        return schema_str, schema_id, f"registry:{subject}"
+    except Exception as exc:
+        logger.warning("Falling back to local schema file (registry lookup failed): %s", exc)
+
+    configured_path = os.getenv("CLICK_AVRO_SCHEMA_PATH")
+    if configured_path:
+        schema_path = Path(configured_path)
+    else:
+        schema_path = Path(__file__).resolve().parents[1] / "schemas" / "click-event.avsc"
+    return schema_path.read_text(encoding="utf-8"), None, f"file:{schema_path}"
+
+
 class AnomalyDetector:
     """Real-time anomaly detection for clickstream data"""
     
@@ -41,7 +71,16 @@ class AnomalyDetector:
         self.kafka_servers = kafka_servers
         self.checkpoint_location = checkpoint_location
         self.late_topic = os.getenv("LATE_EVENTS_TOPIC", "km.events.late.v1")
-        self.late_threshold_minutes = int(os.getenv("LATE_EVENT_THRESHOLD_MINUTES", "10"))
+        self.event_time_policy_minutes = int(
+            os.getenv("EVENT_TIME_POLICY_MINUTES", os.getenv("LATE_EVENT_THRESHOLD_MINUTES", "10"))
+        )
+        self.late_threshold_minutes = self.event_time_policy_minutes
+        self.watermark_duration = f"{self.event_time_policy_minutes} minutes"
+        (
+            self.click_avro_schema,
+            self.click_schema_id,
+            self.click_schema_source,
+        ) = load_click_avro_schema()
         
         # Initialize Spark Session
         self.spark = SparkSession.builder \
@@ -55,6 +94,12 @@ class AnomalyDetector:
         
         self.spark.sparkContext.setLogLevel("WARN")
         logger.info("Spark session initialized")
+        logger.info(
+            "Click schema loaded from %s (schema_id=%s)",
+            self.click_schema_source,
+            self.click_schema_id if self.click_schema_id is not None else "n/a",
+        )
+        logger.info("Event time policy: %s", self.watermark_duration)
         
         # Anomaly detection thresholds
         # Adjusted threshold for easier testing (originally 50 -> 20)
@@ -88,32 +133,29 @@ class AnomalyDetector:
         # Import from_avro here to avoid initialization issues
         from pyspark.sql.avro.functions import from_avro as avro_from_avro
         
-        # Avro schema string for clicks (MUST match producer schema exactly)
         # NOTE: Avro timestamp-millis logical type is read as long in Spark, requires manual conversion
-        avro_schema = """{
-            "type": "record",
-            "name": "ClickEvent",
-            "namespace": "com.clickstream.guardian",
-            "fields": [
-                {"name": "session_id", "type": "long"},
-                {"name": "event_ts", "type": "long"},
-                {"name": "item_id", "type": "long"},
-                {"name": "category", "type": ["null", "string"], "default": null},
-                {"name": "event_type", "type": "string"},
-                {"name": "event_id", "type": "string", "default": ""},
-                {"name": "ingest_ts", "type": "long", "default": 0},
-                {"name": "source", "type": "string", "default": "producer"}
-            ]
-        }"""
-        
-        # Schema Registry uses first 5 bytes for metadata (magic byte + schema ID)
-        # We need to skip these bytes before deserializing
-        clicks_df = kafka_df.select(
+        framed_df = kafka_df.select(
+            col("value"),
+            col("timestamp").alias("kafka_ingest_ts"),
+            expr("getbyte(value, 0)").alias("magic_byte"),
+            expr(
+                "((getbyte(value, 1) & 255) << 24) + "
+                "((getbyte(value, 2) & 255) << 16) + "
+                "((getbyte(value, 3) & 255) << 8) + "
+                "(getbyte(value, 4) & 255)"
+            ).alias("schema_id"),
+        ).filter(col("magic_byte") == lit(0))
+
+        if self.click_schema_id is not None:
+            framed_df = framed_df.filter(col("schema_id") == lit(self.click_schema_id))
+
+        # Confluent wire format: [magic byte][schema id(4 bytes)][avro payload]
+        clicks_df = framed_df.select(
             avro_from_avro(
-                expr("substring(value, 6, length(value))"),  # Skip first 5 bytes
-                avro_schema
+                expr("substring(value, 6, length(value))"),
+                self.click_avro_schema
             ).alias("data"),
-            col("timestamp").alias("kafka_ingest_ts")
+            col("kafka_ingest_ts")
         ).select("data.*", "kafka_ingest_ts")
         
         # Explicitly convert event_ts from long (milliseconds) to timestamp
@@ -198,7 +240,7 @@ class AnomalyDetector:
         # Watermark를 설정하여 state 무한 증가를 방지
         # late_threshold_minutes 이전의 이벤트는 state에서 제거됨
         clicks_watermarked = clicks_df \
-            .withWatermark("event_ts", f"{self.late_threshold_minutes} minutes")
+            .withWatermark("event_ts", self.watermark_duration)
         
         # 10-second tumbling window aggregation
         high_frequency = clicks_watermarked \
@@ -261,7 +303,7 @@ class AnomalyDetector:
         logger.info("Setting up bot-like detection...")
         
         clicks_watermarked = clicks_df \
-            .withWatermark("event_ts", "5 minutes")
+            .withWatermark("event_ts", self.watermark_duration)
         
         # 1-minute sliding window (30 second slide)
         bot_like = clicks_watermarked \
@@ -451,7 +493,7 @@ class AnomalyDetector:
 
         on_time_clicks, late_clicks = self.split_late_events(clicks_df)
         deduped_clicks = on_time_clicks \
-            .withWatermark("event_ts", f"{self.late_threshold_minutes} minutes") \
+            .withWatermark("event_ts", self.watermark_duration) \
             .dropDuplicates(["event_id"])
         
         # DEBUG: Verify raw data is arriving correctly
