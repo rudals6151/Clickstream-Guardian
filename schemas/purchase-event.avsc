@@ -11,8 +11,10 @@
     },
     {
       "name": "event_ts",
-      "type": "long",
-      "logicalType": "timestamp-millis",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
       "doc": "Timestamp when the purchase occurred (milliseconds since epoch)"
     },
     {
@@ -44,8 +46,10 @@
     },
     {
       "name": "ingest_ts",
-      "type": "long",
-      "logicalType": "timestamp-millis",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
       "default": 0,
       "doc": "Producer-side ingestion timestamp in milliseconds"
     },

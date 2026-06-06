@@ -17,6 +17,9 @@ class Settings(BaseSettings):
             db=os.getenv("POSTGRES_DB", "clickstream"),
         )
     )
+    DB_POOL_MIN: int = int(os.getenv("DB_POOL_MIN", "2"))
+    DB_POOL_MAX: int = int(os.getenv("DB_POOL_MAX", "10"))
+    DB_POOL_ACQUIRE_TIMEOUT: float = float(os.getenv("DB_POOL_ACQUIRE_TIMEOUT", "5"))
     
     # API
     API_TITLE: str = "Clickstream Guardian API"

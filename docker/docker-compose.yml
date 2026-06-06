@@ -266,9 +266,17 @@ services:
       - ../spark-streaming:/opt/spark-streaming
       - ../spark-batch:/opt/spark-batch
       - ./schemas:/opt/schemas
+      - spark-checkpoints:/opt/spark-checkpoint
     networks:
       - clickstream-net
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    user: root
+    command:
+      - bash
+      - -c
+      - |
+        mkdir -p /opt/spark-checkpoint
+        chmod -R 777 /opt/spark-checkpoint
+        /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
 
   # Spark Streaming (Always Running)
   spark-streaming:
@@ -300,6 +308,7 @@ services:
     volumes:
       - ../spark-streaming:/opt/spark-streaming
       - ./schemas:/opt/schemas
+      - spark-checkpoints:/opt/spark-checkpoint
     networks:
       - clickstream-net
     restart: unless-stopped
@@ -317,6 +326,8 @@ services:
         sleep 30
         echo "Creating ivy2 cache directory..."
         mkdir -p /root/.ivy2
+        mkdir -p /opt/spark-checkpoint
+        chmod -R 777 /opt/spark-checkpoint
         echo "Starting Spark Streaming Job..."
         /opt/spark/bin/spark-submit \
           --master spark://spark-master:7077 \
@@ -324,7 +335,9 @@ services:
           --driver-memory 2g \
           --executor-memory 2g \
           --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0,org.apache.spark:spark-avro_2.12:3.5.0 \
-          /opt/spark-streaming/anomaly_detector.py
+          /opt/spark-streaming/anomaly_detector.py \
+          --checkpoint /opt/spark-checkpoint/anomaly \
+          --no-console
 
   # Airflow PostgreSQL
   airflow-db:
@@ -450,6 +463,9 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-clickstream}}
+      - DB_POOL_MIN=${DB_POOL_MIN:-5}
+      - DB_POOL_MAX=${DB_POOL_MAX:-40}
+      - DB_POOL_ACQUIRE_TIMEOUT=${DB_POOL_ACQUIRE_TIMEOUT:-10}
     networks:
       - clickstream-net
     deploy:
@@ -457,7 +473,7 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-2}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 15s
@@ -551,6 +567,7 @@ volumes:
   minio-data:
   airflow-db-data:
   airflow-logs:
+  spark-checkpoints:
 
 networks:
   clickstream-net:

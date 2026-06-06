@@ -67,7 +67,7 @@ class AnomalyDetector:
     """Real-time anomaly detection for clickstream data"""
     
     def __init__(self, kafka_servers="kafka-1:29092,kafka-2:29093,kafka-3:29094",
-                 checkpoint_location="/tmp/spark-checkpoint/anomaly"):
+                 checkpoint_location="/opt/spark-checkpoint/anomaly"):
         self.kafka_servers = kafka_servers
         self.checkpoint_location = checkpoint_location
         self.late_topic = os.getenv("LATE_EVENTS_TOPIC", "km.events.late.v1")
@@ -90,6 +90,7 @@ class AnomalyDetector:
             .config("spark.sql.shuffle.partitions", "4") \
             .config("spark.sql.streaming.stateStore.stateSchemaCheck", "false") \
             .config("spark.sql.streaming.statefulOperator.checkCorrectness.enabled", "false") \
+            .config("spark.sql.streaming.statefulOperator.allowMultiple", "false") \
             .getOrCreate()
         
         self.spark.sparkContext.setLogLevel("WARN")
@@ -113,8 +114,7 @@ class AnomalyDetector:
         
         kafka_options = get_kafka_options(
             bootstrap_servers=self.kafka_servers,
-            topic="km.clicks.raw.v1",
-            group_id="anomaly-detector"
+            topic="km.clicks.raw.v1"
         )
         
         # Use "latest" to start from current data (not historical)
@@ -137,17 +137,7 @@ class AnomalyDetector:
         framed_df = kafka_df.select(
             col("value"),
             col("timestamp").alias("kafka_ingest_ts"),
-            expr("getbyte(value, 0)").alias("magic_byte"),
-            expr(
-                "((getbyte(value, 1) & 255) << 24) + "
-                "((getbyte(value, 2) & 255) << 16) + "
-                "((getbyte(value, 3) & 255) << 8) + "
-                "(getbyte(value, 4) & 255)"
-            ).alias("schema_id"),
-        ).filter(col("magic_byte") == lit(0))
-
-        if self.click_schema_id is not None:
-            framed_df = framed_df.filter(col("schema_id") == lit(self.click_schema_id))
+        )
 
         # Confluent wire format: [magic byte][schema id(4 bytes)][avro payload]
         clicks_df = framed_df.select(
@@ -237,13 +227,8 @@ class AnomalyDetector:
         """
         logger.info("Setting up high frequency detection...")
         
-        # Watermark를 설정하여 state 무한 증가를 방지
-        # late_threshold_minutes 이전의 이벤트는 state에서 제거됨
-        clicks_watermarked = clicks_df \
-            .withWatermark("event_ts", self.watermark_duration)
-        
         # 10-second tumbling window aggregation
-        high_frequency = clicks_watermarked \
+        high_frequency = clicks_df \
             .groupBy(
                 window("event_ts", "10 seconds"),
                 "session_id"
@@ -302,11 +287,8 @@ class AnomalyDetector:
         """
         logger.info("Setting up bot-like detection...")
         
-        clicks_watermarked = clicks_df \
-            .withWatermark("event_ts", self.watermark_duration)
-        
         # 1-minute sliding window (30 second slide)
-        bot_like = clicks_watermarked \
+        bot_like = clicks_df \
             .groupBy(
                 window("event_ts", "1 minute", "30 seconds"),
                 "session_id"
@@ -496,17 +478,19 @@ class AnomalyDetector:
             .withWatermark("event_ts", self.watermark_duration) \
             .dropDuplicates(["event_id"])
         
-        # DEBUG: Verify raw data is arriving correctly
-        logger.info("Setting up raw data console output for debugging...")
-        raw_query = deduped_clicks \
-            .writeStream \
-            .outputMode("append") \
-            .format("console") \
-            .option("truncate", "false") \
-            .option("numRows", "10") \
-            .queryName("raw_data_debug") \
-            .trigger(processingTime='5 seconds') \
-            .start()
+        raw_query = None
+        if enable_console:
+            # DEBUG: Verify raw Kafka -> Spark parsing only when explicitly enabled.
+            logger.info("Setting up raw data console output for debugging...")
+            raw_query = deduped_clicks \
+                .writeStream \
+                .outputMode("append") \
+                .format("console") \
+                .option("truncate", "false") \
+                .option("numRows", "10") \
+                .queryName("raw_data_debug") \
+                .trigger(processingTime='5 seconds') \
+                .start()
         
         # High frequency detection
         high_frequency_anomalies = self.detect_high_frequency(deduped_clicks)
@@ -540,7 +524,8 @@ class AnomalyDetector:
             self.spark.streams.awaitAnyTermination()
         except KeyboardInterrupt:
             logger.info("Stopping anomaly detection job...")
-            raw_query.stop()
+            if raw_query:
+                raw_query.stop()
             late_query.stop()
             query1.stop()
             query3.stop()
@@ -561,7 +546,7 @@ def main():
     )
     parser.add_argument(
         '--checkpoint',
-        default='/tmp/spark-checkpoint/anomaly',
+        default='/opt/spark-checkpoint/anomaly',
         help='Checkpoint location'
     )
     parser.add_argument(

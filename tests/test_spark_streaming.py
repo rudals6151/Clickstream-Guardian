@@ -66,10 +66,10 @@ class TestKafkaUtils:
     def test_get_kafka_options(self):
         from common.kafka_utils import get_kafka_options
 
-        opts = get_kafka_options("broker:9092", "test-topic", "test-group")
+        opts = get_kafka_options("broker:9092", "test-topic")
         assert opts["kafka.bootstrap.servers"] == "broker:9092"
         assert opts["subscribe"] == "test-topic"
-        assert opts["kafka.group.id"] == "test-group"
+        assert "kafka.group.id" not in opts
         assert "startingOffsets" in opts
 
 
