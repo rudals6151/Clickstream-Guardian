@@ -100,6 +100,7 @@ python scripts/generate_slo_report.py --hours 24
 
 - [테스트 실행 리포트](docs/TEST_EXECUTION_REPORT_2026-02-22.md)
 - [지표 요약](docs/METRICS_SUMMARY_2026-02-22.md)
+- [기술 선택과 운영 설정](docs/TECHNICAL_DECISIONS.md)
 
 ## 디렉터리 구조
 
