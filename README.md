@@ -8,8 +8,6 @@
 
 Clickstream Guardian은 이커머스 클릭/구매 이벤트를 수집하고, 이상 세션을 실시간에 가깝게 탐지하며, 원천 이벤트를 데이터 레이크에 저장한 뒤 일별 분석 지표를 계산하는 로컬 데이터 플랫폼입니다. 최종 결과는 FastAPI와 Streamlit 대시보드를 통해 조회할 수 있습니다.
 
-이 프로젝트는 데이터 엔지니어링 면접에서 설명하기 좋은 주제에 초점을 맞췄습니다.
-
 - Kafka, Avro, Schema Registry 기반 이벤트 수집
 - Spark Structured Streaming 기반 실시간 처리
 - Airflow와 Spark 기반 배치 분석
@@ -96,10 +94,9 @@ python scripts/failure_simulation.py --mode stop-start --down-seconds 20
 python scripts/generate_slo_report.py --hours 24
 ```
 
-최근 검증 결과:
+문서:
 
-- [테스트 실행 리포트](docs/TEST_EXECUTION_REPORT_2026-02-22.md)
-- [지표 요약](docs/METRICS_SUMMARY_2026-02-22.md)
+- [새 테스트 실행 순서](docs/testing/README.md)
 - [기술 선택과 운영 설정](docs/TECHNICAL_DECISIONS.md)
 
 ## 디렉터리 구조

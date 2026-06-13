@@ -1,22 +1,22 @@
-# 테스트 계획 및 결과 문서
+# 테스트
 
-이 폴더는 Clickstream Guardian의 부하 테스트, 장애 테스트, 데이터 품질 테스트 계획과 결과를 기록하기 위한 공간입니다.
+기존 테스트 결과를 재사용하지 않고 작은 검증부터 순서대로 실행한다.
 
-진행 원칙:
+## 원칙
 
-1. 각 테스트는 목적, 데이터 규모, 실행 명령, 성공 기준을 먼저 정의한다.
-2. 테스트 실행 후 결과 수치와 실패 원인을 기록한다.
-3. 병목이나 실패가 확인되면 설정/코드를 보완한다.
-4. 보완 후 같은 테스트를 재실행해 개선 여부를 기록한다.
-5. 한 테스트가 정리되면 다음 테스트로 넘어간다.
+- 테스트마다 전용 입력 범위와 시작·종료 시각을 기록한다.
+- 입력 성공과 downstream 처리 성공을 구분한다.
+- 실제 파이프라인 테스트는 `anomaly_detector.py`를 그대로 사용한다.
+- 처리량을 올리기 전에 데이터 정확성과 관측 지표부터 확인한다.
+- 실패하면 리소스 증설 전에 구조, 설정, 데이터 분포를 먼저 확인한다.
 
-테스트 문서:
+## 실행 순서
 
-- [01 API 부하 테스트](01_api_load_test.md)
-- [02 Kafka Producer 처리량 테스트](02_kafka_producer_throughput.md)
-- [03 Spark Streaming SLO 및 복구 테스트](03_spark_streaming_slo_recovery.md)
-- [04 Kafka Connect / MinIO 적재 테스트](04_kafka_connect_minio_ingestion.md)
-- [05 Airflow Batch E2E 테스트](05_airflow_batch_e2e.md)
-- [06 장애 복구 매트릭스 테스트](06_failure_recovery_matrix.md)
-- [07 데이터 품질 테스트](07_data_quality_checks.md)
+| 번호 | 테스트 | 목적 |
+|---:|---|---|
+| 00 | 환경 상태 확인 | 필수 컨테이너, Kafka 토픽, PostgreSQL, API 상태 확인 |
+| 01 | 핵심 경로 단기 용량 | Kafka -> Spark -> PostgreSQL의 60초 안정 EPS와 병목 측정 |
+| 02 | 장애 복구 | Spark 애플리케이션·Worker, Kafka broker, PostgreSQL 장애 복구 확인 |
 
+각 테스트의 명령, 입력, 기대 결과, 실제 결과는 번호별 문서에 새로 기록한다.
+생성된 원시 결과는 `docs/testing/results/`에 저장한다.

@@ -262,7 +262,6 @@ Docker Compose는 전체 파이프라인을 한 로컬 환경에서 재현하기
 의도:
 
 - Kafka, Spark, Airflow, Postgres, MinIO, API, Dashboard를 한 번에 실행
-- 면접/포트폴리오 리뷰에서 architecture를 직접 보여줄 수 있음
 - healthcheck와 `depends_on`으로 기동 순서 문제를 줄임
 - 각 서비스의 환경변수를 `.env`로 분리
 
@@ -277,7 +276,7 @@ Docker Compose는 전체 파이프라인을 한 로컬 환경에서 재현하기
 
 ## 이 프로젝트에서 가벼운 대안을 쓰지 않은 이유
 
-솔직한 이유는 학습과 체험입니다. 이 규모의 데이터라면 Kafka와 Spark가 필수는 아닙니다. 다만 포트폴리오 관점에서는 단순 구현보다 아래 내용을 직접 다룬 경험이 중요하다고 판단했습니다.
+현재 데이터 규모에서는 Kafka와 Spark가 필수는 아니다. 이 구성은 이벤트 기반 처리와 분산 데이터 파이프라인의 동작 특성을 검증하기 위해 선택했다.
 
 - Kafka topic/partition/offset/replication 이해
 - Avro schema와 Schema Registry 연동
@@ -288,7 +287,7 @@ Docker Compose는 전체 파이프라인을 한 로컬 환경에서 재현하기
 - PostgreSQL partition/index/운영 metadata 설계
 - 장애 시뮬레이션과 SLO 측정
 
-면접에서는 "이 프로젝트 규모에 Kafka/Spark가 꼭 필요해서 썼다"라고 말하기보다, "작은 도메인에 대규모 데이터 플랫폼 패턴을 축소 적용해보고, 각 기술의 운영 trade-off를 직접 확인했다"라고 설명하는 것이 더 정확합니다.
+따라서 이 구성은 최소 비용 구현보다 각 구성 요소의 처리 특성, 장애 복구 방식, 운영상 제약을 확인하는 데 목적이 있다.
 
 ## 실제 운영이라면 다르게 할 점
 
