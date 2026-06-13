@@ -1,0 +1,191 @@
+{
+  "test": {
+    "name": "Spark application forced termination and checkpoint recovery",
+    "target_eps": 12000,
+    "load_duration_seconds": 60,
+    "fault_after_seconds": 20,
+    "recovery_timeout_seconds": 300,
+    "started_at": "2026-06-07T12:56:37.593128+00:00",
+    "fault_at": "2026-06-07T12:56:57.597945+00:00",
+    "restart_observed_at": "2026-06-07T12:56:59.072640+00:00",
+    "finished_at": "2026-06-07T12:58:02.668862+00:00",
+    "fault_command": "docker exec spark-streaming-anomaly pkill -9 -f '^python3 /opt/spark-streaming/anomaly_detector.py'",
+    "kill_return_code": 0,
+    "kill_output": ""
+  },
+  "producer": {
+    "configuration": {
+      "duration_seconds": 60,
+      "bootstrap_servers": "localhost:9092,localhost:9093,localhost:9094",
+      "schema_registry_url": "http://localhost:8081",
+      "acks": "all",
+      "idempotence": true,
+      "compression": "lz4",
+      "linger_ms": 10,
+      "batch_size": 32768,
+      "event_profile": {
+        "anomaly_ratio": 0.1,
+        "anomaly_session_pool": 4,
+        "anomaly_item_pool": 3,
+        "duplicate_ratio": 0.001,
+        "late_ratio": 0.001,
+        "late_minutes": 11
+      }
+    },
+    "click": {
+      "target_eps": 12000,
+      "actual_eps": 11999.93,
+      "target_achievement_pct": 100.0,
+      "attempted": 719996,
+      "delivered": 719996,
+      "failed": 0,
+      "success_rate_pct": 100.0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 9.87,
+        "p95": 16.1,
+        "p99": 20.53
+      }
+    },
+    "purchase": {
+      "target_eps": 0,
+      "actual_eps": 0.0,
+      "target_achievement_pct": 100,
+      "attempted": 0,
+      "delivered": 0,
+      "failed": 0,
+      "success_rate_pct": 0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    "combined": {
+      "target_eps": 12000,
+      "actual_eps": 11999.93,
+      "attempted": 719996,
+      "delivered": 719996,
+      "failed": 0
+    },
+    "generated_profiles": {
+      "normal": 646955,
+      "anomaly": 72325,
+      "duplicate": 717,
+      "late": 732
+    },
+    "passed": true
+  },
+  "producer_stdout": "[WARMUP] Loading metadata and sending one event per active topic\n[START] duration=60s click=12000 EPS purchase=0 EPS\n[PROGRESS] 10s click=11991.3 EPS purchase=0.0 EPS\n[PROGRESS] 20s click=11994.1 EPS purchase=0.0 EPS\n[PROGRESS] 30s click=11997.3 EPS purchase=0.0 EPS\n[PROGRESS] 40s click=11996.8 EPS purchase=0.0 EPS\n[PROGRESS] 50s click=11997.2 EPS purchase=0.0 EPS\n\n[RESULT]\ntype           target     actual    delivered   failed    success        p50        p95        p99   status\nclick        12000.00   11999.93       719996        0    100.00%      9.87ms     16.10ms     20.53ms     PASS\npurchase         0.00       0.00            0        0      0.00%      0.00ms      0.00ms      0.00ms     PASS\ncombined     12000.00   11999.93       719996        0\n\n[STATUS] PASS\n\n[INFO] JSON result written to C:\\Users\\USER\\Desktop\\bootcamp\\project\\Clickstream-Guardian\\docs\\testing\\results\\02_01_spark_application_failure_producer.json\n",
+  "producer_stderr": "",
+  "kafka": {
+    "offsets_before": {
+      "0": 15868617,
+      "1": 15588906,
+      "2": 15649402
+    },
+    "offsets_after": {
+      "0": 16102783,
+      "1": 15841665,
+      "2": 15882474
+    },
+    "offset_delta": 719997,
+    "expected_records_including_warmup": 719997
+  },
+  "spark": {
+    "before": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:55:10.857001417Z",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "after_restart": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:56:58.456155204Z",
+      "finished_at": "2026-06-07T12:56:58.432082196Z",
+      "restart_count": 1,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "after_test": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:56:58.456155204Z",
+      "finished_at": "2026-06-07T12:56:58.432082196Z",
+      "restart_count": 1,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "progress": {
+      "query_started": {
+        "late_events": {
+          "run_id": "742bb40d-571a-4365-aed4-0c87cb120666",
+          "timestamp": "2026-06-07T12:57:07.757Z"
+        },
+        "high_frequency": {
+          "run_id": "030a736f-0ea6-4e03-8e02-44068e44448b",
+          "timestamp": "2026-06-07T12:57:07.838Z"
+        },
+        "bot_like": {
+          "run_id": "e1744bbf-a72e-4bcf-97b5-11ada5b9e17c",
+          "timestamp": "2026-06-07T12:57:08.534Z"
+        }
+      },
+      "queries": {
+        "bot_like": {
+          "new_run_id": "e1744bbf-a72e-4bcf-97b5-11ada5b9e17c",
+          "batches_observed": 6,
+          "input_rows_total": 719997,
+          "max_lag": 83521,
+          "first_resumed_batch_completed_at": "2026-06-07T12:57:35.453000+00:00",
+          "final_offsets_reached_at": "2026-06-07T12:58:01.267000+00:00",
+          "final_lag": 0
+        },
+        "high_frequency": {
+          "new_run_id": "030a736f-0ea6-4e03-8e02-44068e44448b",
+          "batches_observed": 6,
+          "input_rows_total": 719997,
+          "max_lag": 63362,
+          "first_resumed_batch_completed_at": "2026-06-07T12:57:30.439000+00:00",
+          "final_offsets_reached_at": "2026-06-07T12:57:59.416000+00:00",
+          "final_lag": 0
+        },
+        "late_events": {
+          "new_run_id": "742bb40d-571a-4365-aed4-0c87cb120666",
+          "batches_observed": 6,
+          "input_rows_total": 719997,
+          "max_lag": 0,
+          "first_resumed_batch_completed_at": "2026-06-07T12:57:17.466000+00:00",
+          "final_offsets_reached_at": "2026-06-07T12:57:49.796000+00:00",
+          "final_lag": 0
+        }
+      },
+      "all_queries_recovered_at": "2026-06-07T12:58:01.267000+00:00",
+      "terminated_events": []
+    },
+    "rto_seconds": 63.669
+  },
+  "postgres": {
+    "rows_before": 821,
+    "rows_after": 861,
+    "row_delta": 40,
+    "duplicate_business_keys": 0
+  },
+  "assertions": {
+    "producer_failures_zero": true,
+    "kafka_offset_delta_matches_delivered": true,
+    "automatic_restart_observed": true,
+    "all_queries_reached_final_offsets": true,
+    "each_query_input_matches_delivered": true,
+    "postgres_business_key_duplicates_zero": true,
+    "postgres_rows_increased": true,
+    "spark_running_after_recovery": true
+  },
+  "passed": true,
+  "failure_reasons": []
+}

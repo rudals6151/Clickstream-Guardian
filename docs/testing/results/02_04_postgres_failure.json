@@ -1,0 +1,220 @@
+{
+  "test": {
+    "name": "PostgreSQL outage and Spark sink recovery",
+    "target_eps": 12000,
+    "load_duration_seconds": 60,
+    "fault_after_seconds": 20,
+    "outage_seconds": 15,
+    "started_at": "2026-06-07T14:18:17.355221+00:00",
+    "fault_at": "2026-06-07T14:18:37.361277+00:00",
+    "recovery_started_at": "2026-06-07T14:18:52.761064+00:00",
+    "postgres_healthy_at": "2026-06-07T14:19:04.116611+00:00",
+    "db_write_resumed_at": "2026-06-07T14:19:38.939039+00:00",
+    "fully_recovered_at": "2026-06-07T14:19:38.939039+00:00",
+    "finished_at": "2026-06-07T14:19:39.467714+00:00",
+    "fault_command": "docker stop --timeout 0 postgres; wait 15s; docker start postgres",
+    "stop_return_code": 0,
+    "start_return_code": 0
+  },
+  "producer": {
+    "configuration": {
+      "duration_seconds": 60,
+      "bootstrap_servers": "localhost:9092,localhost:9093,localhost:9094",
+      "schema_registry_url": "http://localhost:8081",
+      "acks": "all",
+      "idempotence": true,
+      "compression": "lz4",
+      "linger_ms": 10,
+      "batch_size": 32768,
+      "event_profile": {
+        "anomaly_ratio": 0.1,
+        "anomaly_session_pool": 4,
+        "anomaly_item_pool": 3,
+        "duplicate_ratio": 0.001,
+        "late_ratio": 0.001,
+        "late_minutes": 11
+      }
+    },
+    "click": {
+      "target_eps": 12000,
+      "actual_eps": 12000.0,
+      "target_achievement_pct": 100.0,
+      "attempted": 720000,
+      "delivered": 720000,
+      "failed": 0,
+      "success_rate_pct": 100.0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 9.84,
+        "p95": 15.94,
+        "p99": 20.23
+      }
+    },
+    "purchase": {
+      "target_eps": 0,
+      "actual_eps": 0.0,
+      "target_achievement_pct": 100,
+      "attempted": 0,
+      "delivered": 0,
+      "failed": 0,
+      "success_rate_pct": 0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    "combined": {
+      "target_eps": 12000,
+      "actual_eps": 12000.0,
+      "attempted": 720000,
+      "delivered": 720000,
+      "failed": 0
+    },
+    "generated_profiles": {
+      "normal": 647376,
+      "anomaly": 71896,
+      "duplicate": 729,
+      "late": 735
+    },
+    "passed": true
+  },
+  "producer_stdout": "[WARMUP] Loading metadata and sending one event per active topic\n[START] duration=60s click=12000 EPS purchase=0 EPS\n[PROGRESS] 10s click=11987.1 EPS purchase=0.0 EPS\n[PROGRESS] 20s click=11993.3 EPS purchase=0.0 EPS\n[PROGRESS] 30s click=11996.1 EPS purchase=0.0 EPS\n[PROGRESS] 40s click=11997.5 EPS purchase=0.0 EPS\n[PROGRESS] 50s click=11998.5 EPS purchase=0.0 EPS\n\n[RESULT]\ntype           target     actual    delivered   failed    success        p50        p95        p99   status\nclick        12000.00   12000.00       720000        0    100.00%      9.84ms     15.94ms     20.23ms     PASS\npurchase         0.00       0.00            0        0      0.00%      0.00ms      0.00ms      0.00ms     PASS\ncombined     12000.00   12000.00       720000        0\n\n[STATUS] PASS\n\n[INFO] JSON result written to C:\\Users\\USER\\Desktop\\bootcamp\\project\\Clickstream-Guardian\\docs\\testing\\results\\02_04_postgres_failure_producer.json\n",
+  "producer_stderr": "",
+  "kafka": {
+    "offsets_before": {
+      "0": 18061192,
+      "1": 17735361,
+      "2": 17790373
+    },
+    "offsets_after": {
+      "0": 18314274,
+      "1": 17966805,
+      "2": 18025848
+    },
+    "offset_delta": 720001,
+    "expected_records_including_warmup": 720001
+  },
+  "spark": {
+    "streaming_before": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T14:17:21.520124372Z",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "streaming_after": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T14:17:21.520124372Z",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "restart_count_delta": 0,
+    "progress": {
+      "queries": {
+        "bot_like": {
+          "run_ids": [
+            "35b1a70c-7e3a-4b52-88ce-99393b608b3e"
+          ],
+          "batches_observed": 5,
+          "input_rows_metric_total": 720001,
+          "logical_offset_span": 720001,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 67116,
+          "first_batch_after_fault_completed_at": "2026-06-07T14:18:56.827000+00:00",
+          "final_offsets_reached_at": "2026-06-07T14:19:35.977000+00:00",
+          "final_lag": 0
+        },
+        "high_frequency": {
+          "run_ids": [
+            "5b375bc4-da15-49d0-86cb-0ddd72940118"
+          ],
+          "batches_observed": 5,
+          "input_rows_metric_total": 720001,
+          "logical_offset_span": 720001,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 68309,
+          "first_batch_after_fault_completed_at": "2026-06-07T14:18:57.099000+00:00",
+          "final_offsets_reached_at": "2026-06-07T14:19:37.291000+00:00",
+          "final_lag": 0
+        },
+        "late_events": {
+          "run_ids": [
+            "043f044e-e3e1-42fd-8918-780d0708b13c"
+          ],
+          "batches_observed": 7,
+          "input_rows_metric_total": 720001,
+          "logical_offset_span": 720001,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 0,
+          "first_batch_after_fault_completed_at": "2026-06-07T14:18:40.257000+00:00",
+          "final_offsets_reached_at": "2026-06-07T14:19:26.255000+00:00",
+          "final_lag": 0
+        }
+      },
+      "all_queries_recovered_at": "2026-06-07T14:19:37.291000+00:00",
+      "query_started_events": [],
+      "query_terminated_events": []
+    },
+    "relevant_logs": [
+      "2026-06-07T14:18:41.963704987Z 2026-06-07 14:18:41,963 - __main__ - WARNING - Batch 172: PostgreSQL unavailable on attempt 1/6: could not translate host name \"postgres\" to address: Name or service not known",
+      "2026-06-07T14:18:42.178906829Z 2026-06-07 14:18:42,178 - __main__ - WARNING - Batch 172: PostgreSQL unavailable on attempt 1/6: could not translate host name \"postgres\" to address: Name or service not known",
+      "2026-06-07T14:18:46.789624317Z 2026-06-07 14:18:46,789 - __main__ - WARNING - Batch 172: PostgreSQL unavailable on attempt 2/6: could not translate host name \"postgres\" to address: Name or service not known",
+      "2026-06-07T14:18:47.014519892Z 2026-06-07 14:18:47,014 - __main__ - WARNING - Batch 172: PostgreSQL unavailable on attempt 2/6: could not translate host name \"postgres\" to address: Name or service not known",
+      "2026-06-07T14:18:52.762302289Z 2026-06-07 14:18:52,761 - __main__ - WARNING - Batch 172: PostgreSQL unavailable on attempt 3/6: could not translate host name \"postgres\" to address: Name or service not known",
+      "2026-06-07T14:18:52.973046695Z 2026-06-07 14:18:52,972 - __main__ - WARNING - Batch 172: PostgreSQL unavailable on attempt 3/6: could not translate host name \"postgres\" to address: Name or service not known"
+    ]
+  },
+  "postgres": {
+    "restart_policy": "unless-stopped",
+    "before": {
+      "running": true,
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-06-07T14:15:12.653727809Z",
+      "exit_code": 0,
+      "oom_killed": false
+    },
+    "after": {
+      "running": true,
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-06-07T14:18:52.843818726Z",
+      "exit_code": 0,
+      "oom_killed": false
+    },
+    "rows_before": 1177,
+    "rows_observed_after_resume": 1217,
+    "rows_after": 1217,
+    "row_delta": 40,
+    "duplicate_business_keys": 0,
+    "rto_seconds": 61.578
+  },
+  "assertions": {
+    "producer_failures_zero": true,
+    "producer_achieved_target": true,
+    "kafka_offset_delta_matches_delivered": true,
+    "postgres_outage_command_succeeded": true,
+    "postgres_start_command_succeeded": true,
+    "postgres_healthy_after_recovery": true,
+    "all_queries_reached_final_offsets": true,
+    "each_query_offsets_cover_delivered_without_gap": true,
+    "postgres_write_resumed": true,
+    "postgres_rows_increased": true,
+    "postgres_business_key_duplicates_zero": true,
+    "streaming_running_after_recovery": true,
+    "streaming_container_did_not_restart": true,
+    "queries_did_not_terminate": true
+  },
+  "passed": true,
+  "failure_reasons": []
+}

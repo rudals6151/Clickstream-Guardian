@@ -1,0 +1,386 @@
+{
+  "test": {
+    "name": "Kafka broker outage, leader failover, and ISR recovery",
+    "broker": "kafka-3",
+    "target_eps": 12000,
+    "load_duration_seconds": 60,
+    "fault_after_seconds": 20,
+    "outage_seconds": 30,
+    "started_at": "2026-06-07T13:53:11.214061+00:00",
+    "fault_at": "2026-06-07T13:53:31.219926+00:00",
+    "recovery_started_at": "2026-06-07T13:54:01.220857+00:00",
+    "broker_started_at": "2026-06-07T13:54:01.672772+00:00",
+    "isr_recovered_at": "2026-06-07T13:54:15.608862+00:00",
+    "fully_recovered_at": "2026-06-07T13:54:33.888000+00:00",
+    "finished_at": "2026-06-07T13:54:37.367836+00:00",
+    "fault_command": "docker stop --timeout 0 kafka-3; wait 30s; docker start kafka-3",
+    "stop_return_code": 0,
+    "start_return_code": 0
+  },
+  "producer": {
+    "configuration": {
+      "duration_seconds": 60,
+      "bootstrap_servers": "localhost:9092,localhost:9093,localhost:9094",
+      "schema_registry_url": "http://localhost:8081",
+      "acks": "all",
+      "idempotence": true,
+      "compression": "lz4",
+      "linger_ms": 10,
+      "batch_size": 32768,
+      "event_profile": {
+        "anomaly_ratio": 0.1,
+        "anomaly_session_pool": 4,
+        "anomaly_item_pool": 3,
+        "duplicate_ratio": 0.001,
+        "late_ratio": 0.001,
+        "late_minutes": 11
+      }
+    },
+    "click": {
+      "target_eps": 12000,
+      "actual_eps": 12000.0,
+      "target_achievement_pct": 100.0,
+      "attempted": 720000,
+      "delivered": 720000,
+      "failed": 0,
+      "success_rate_pct": 100.0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 12.36,
+        "p95": 16458.94,
+        "p99": 18617.28
+      }
+    },
+    "purchase": {
+      "target_eps": 0,
+      "actual_eps": 0.0,
+      "target_achievement_pct": 100,
+      "attempted": 0,
+      "delivered": 0,
+      "failed": 0,
+      "success_rate_pct": 0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    "combined": {
+      "target_eps": 12000,
+      "actual_eps": 12000.0,
+      "attempted": 720000,
+      "delivered": 720000,
+      "failed": 0
+    },
+    "generated_profiles": {
+      "normal": 647065,
+      "anomaly": 72211,
+      "duplicate": 725,
+      "late": 671
+    },
+    "passed": true
+  },
+  "producer_stdout": "[WARMUP] Loading metadata and sending one event per active topic\n[START] duration=60s click=12000 EPS purchase=0 EPS\n[PROGRESS] 10s click=11987.3 EPS purchase=0.0 EPS\n[PROGRESS] 20s click=11344.8 EPS purchase=0.0 EPS\n[PROGRESS] 38s click=11984.6 EPS purchase=0.0 EPS\n[PROGRESS] 40s click=11988.7 EPS purchase=0.0 EPS\n[PROGRESS] 50s click=11997.3 EPS purchase=0.0 EPS\n\n[RESULT]\ntype           target     actual    delivered   failed    success        p50        p95        p99   status\nclick        12000.00   12000.00       720000        0    100.00%     12.36ms  16458.94ms  18617.28ms     PASS\npurchase         0.00       0.00            0        0      0.00%      0.00ms      0.00ms      0.00ms     PASS\ncombined     12000.00   12000.00       720000        0\n\n[STATUS] PASS\n\n[INFO] JSON result written to C:\\Users\\USER\\Desktop\\bootcamp\\project\\Clickstream-Guardian\\docs\\testing\\results\\02_03_kafka_broker_failure_producer.json\n",
+  "producer_stderr": "%6|1780840411.374|FAIL|rdkafka#producer-1| [thrd:localhost:9094/bootstrap]: localhost:9094/3: Disconnected (after 19975ms in state UP)\n%6|1780840411.389|FAIL|rdkafka#producer-1| [thrd:localhost:9094/bootstrap]: localhost:9094/3: Disconnected while requesting ApiVersion: might be caused by incorrect security.protocol configuration (connecting to a SSL listener?) or broker version is < 0.10 (see api.version.request) (after 3ms in state APIVERSION_QUERY)\n%6|1780840411.503|FAIL|rdkafka#producer-1| [thrd:localhost:9094/bootstrap]: localhost:9094/3: Disconnected while requesting ApiVersion: might be caused by incorrect security.protocol configuration (connecting to a SSL listener?) or broker version is < 0.10 (see api.version.request) (after 2ms in state APIVERSION_QUERY, 1 identical error(s) suppressed)\n%3|1780840413.881|FAIL|rdkafka#producer-1| [thrd:localhost:9094/bootstrap]: localhost:9094/3: Connect to ipv6#[::1]:9094 failed: Unknown error (after 2032ms in state CONNECT)\n%3|1780840430.217|FAIL|rdkafka#producer-1| [thrd:localhost:9094/bootstrap]: localhost:9094/3: Connect to ipv4#127.0.0.1:9094 failed: Unknown error (after 2031ms in state CONNECT)\n",
+  "kafka": {
+    "min_insync_replicas": 1,
+    "min_insync_replicas_source": "Kafka broker default; no dynamic topic or broker override",
+    "offsets_before": {
+      "0": 17345747,
+      "1": 16993435,
+      "2": 17087741
+    },
+    "offsets_after": {
+      "0": 17578572,
+      "1": 17262892,
+      "2": 17305460
+    },
+    "offset_delta": 720001,
+    "expected_records_including_warmup": 720001,
+    "broker_before": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T13:49:16.201031637Z",
+      "finished_at": "2026-06-07T13:49:01.26062249Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "broker_after": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T13:54:01.320625471Z",
+      "finished_at": "2026-06-07T13:53:31.382440116Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "topic_before": {
+      "timestamp": "2026-06-07T13:53:09.678650+00:00",
+      "partitions": {
+        "0": {
+          "leader": 1,
+          "replicas": [
+            1,
+            3
+          ],
+          "isr": [
+            1,
+            3
+          ],
+          "under_replicated": false
+        },
+        "1": {
+          "leader": 1,
+          "replicas": [
+            2,
+            1
+          ],
+          "isr": [
+            1,
+            2
+          ],
+          "under_replicated": false
+        },
+        "2": {
+          "leader": 3,
+          "replicas": [
+            3,
+            2
+          ],
+          "isr": [
+            3,
+            2
+          ],
+          "under_replicated": false
+        }
+      },
+      "all_replicas_in_sync": true,
+      "raw": "Topic: km.clicks.raw.v1\tTopicId: PwtidmVbRsChWXEUluXXcw\tPartitionCount: 3\tReplicationFactor: 2\tConfigs: \n\tTopic: km.clicks.raw.v1\tPartition: 0\tLeader: 1\tReplicas: 1,3\tIsr: 1,3\n\tTopic: km.clicks.raw.v1\tPartition: 1\tLeader: 1\tReplicas: 2,1\tIsr: 1,2\n\tTopic: km.clicks.raw.v1\tPartition: 2\tLeader: 3\tReplicas: 3,2\tIsr: 3,2"
+    },
+    "topic_degraded": {
+      "timestamp": "2026-06-07T13:53:53.289705+00:00",
+      "partitions": {
+        "0": {
+          "leader": 1,
+          "replicas": [
+            1,
+            3
+          ],
+          "isr": [
+            1
+          ],
+          "under_replicated": true
+        },
+        "1": {
+          "leader": 1,
+          "replicas": [
+            2,
+            1
+          ],
+          "isr": [
+            1,
+            2
+          ],
+          "under_replicated": false
+        },
+        "2": {
+          "leader": 2,
+          "replicas": [
+            3,
+            2
+          ],
+          "isr": [
+            2
+          ],
+          "under_replicated": true
+        }
+      },
+      "all_replicas_in_sync": false,
+      "raw": "Topic: km.clicks.raw.v1\tTopicId: PwtidmVbRsChWXEUluXXcw\tPartitionCount: 3\tReplicationFactor: 2\tConfigs: \n\tTopic: km.clicks.raw.v1\tPartition: 0\tLeader: 1\tReplicas: 1,3\tIsr: 1\n\tTopic: km.clicks.raw.v1\tPartition: 1\tLeader: 1\tReplicas: 2,1\tIsr: 1,2\n\tTopic: km.clicks.raw.v1\tPartition: 2\tLeader: 2\tReplicas: 3,2\tIsr: 2"
+    },
+    "topic_after_recovery": {
+      "timestamp": "2026-06-07T13:54:15.608862+00:00",
+      "partitions": {
+        "0": {
+          "leader": 1,
+          "replicas": [
+            1,
+            3
+          ],
+          "isr": [
+            1,
+            3
+          ],
+          "under_replicated": false
+        },
+        "1": {
+          "leader": 1,
+          "replicas": [
+            2,
+            1
+          ],
+          "isr": [
+            1,
+            2
+          ],
+          "under_replicated": false
+        },
+        "2": {
+          "leader": 2,
+          "replicas": [
+            3,
+            2
+          ],
+          "isr": [
+            2,
+            3
+          ],
+          "under_replicated": false
+        }
+      },
+      "all_replicas_in_sync": true,
+      "raw": "Topic: km.clicks.raw.v1\tTopicId: PwtidmVbRsChWXEUluXXcw\tPartitionCount: 3\tReplicationFactor: 2\tConfigs: \n\tTopic: km.clicks.raw.v1\tPartition: 0\tLeader: 1\tReplicas: 1,3\tIsr: 1,3\n\tTopic: km.clicks.raw.v1\tPartition: 1\tLeader: 1\tReplicas: 2,1\tIsr: 1,2\n\tTopic: km.clicks.raw.v1\tPartition: 2\tLeader: 2\tReplicas: 3,2\tIsr: 2,3"
+    },
+    "topic_final": {
+      "timestamp": "2026-06-07T13:54:37.367302+00:00",
+      "partitions": {
+        "0": {
+          "leader": 1,
+          "replicas": [
+            1,
+            3
+          ],
+          "isr": [
+            1,
+            3
+          ],
+          "under_replicated": false
+        },
+        "1": {
+          "leader": 1,
+          "replicas": [
+            2,
+            1
+          ],
+          "isr": [
+            1,
+            2
+          ],
+          "under_replicated": false
+        },
+        "2": {
+          "leader": 2,
+          "replicas": [
+            3,
+            2
+          ],
+          "isr": [
+            2,
+            3
+          ],
+          "under_replicated": false
+        }
+      },
+      "all_replicas_in_sync": true,
+      "raw": "Topic: km.clicks.raw.v1\tTopicId: PwtidmVbRsChWXEUluXXcw\tPartitionCount: 3\tReplicationFactor: 2\tConfigs: \n\tTopic: km.clicks.raw.v1\tPartition: 0\tLeader: 1\tReplicas: 1,3\tIsr: 1,3\n\tTopic: km.clicks.raw.v1\tPartition: 1\tLeader: 1\tReplicas: 2,1\tIsr: 1,2\n\tTopic: km.clicks.raw.v1\tPartition: 2\tLeader: 2\tReplicas: 3,2\tIsr: 2,3"
+    },
+    "leader_changed_during_outage": true,
+    "rto_seconds": 62.668
+  },
+  "spark": {
+    "streaming_before": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:56:58.456155204Z",
+      "finished_at": "2026-06-07T12:56:58.432082196Z",
+      "restart_count": 1,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "streaming_after": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:56:58.456155204Z",
+      "finished_at": "2026-06-07T12:56:58.432082196Z",
+      "restart_count": 1,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "progress": {
+      "queries": {
+        "bot_like": {
+          "run_ids": [
+            "e1744bbf-a72e-4bcf-97b5-11ada5b9e17c"
+          ],
+          "batches_observed": 8,
+          "input_rows_metric_total": 720001,
+          "logical_offset_span": 720001,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 50269,
+          "first_batch_after_fault_completed_at": "2026-06-07T13:53:34.133000+00:00",
+          "final_offsets_reached_at": "2026-06-07T13:54:33.888000+00:00",
+          "final_lag": 0
+        },
+        "high_frequency": {
+          "run_ids": [
+            "030a736f-0ea6-4e03-8e02-44068e44448b"
+          ],
+          "batches_observed": 8,
+          "input_rows_metric_total": 720001,
+          "logical_offset_span": 720001,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 50269,
+          "first_batch_after_fault_completed_at": "2026-06-07T13:53:33.380000+00:00",
+          "final_offsets_reached_at": "2026-06-07T13:54:32.886000+00:00",
+          "final_lag": 0
+        },
+        "late_events": {
+          "run_ids": [
+            "742bb40d-571a-4365-aed4-0c87cb120666"
+          ],
+          "batches_observed": 5,
+          "input_rows_metric_total": 720001,
+          "logical_offset_span": 720001,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 50269,
+          "first_batch_after_fault_completed_at": "2026-06-07T13:54:14.654000+00:00",
+          "final_offsets_reached_at": "2026-06-07T13:54:22.715000+00:00",
+          "final_lag": 0
+        }
+      },
+      "all_queries_recovered_at": "2026-06-07T13:54:33.888000+00:00",
+      "query_started_events": [],
+      "query_terminated_events": []
+    }
+  },
+  "postgres": {
+    "rows_before": 1061,
+    "rows_after": 1097,
+    "row_delta": 36,
+    "duplicate_business_keys": 0
+  },
+  "assertions": {
+    "producer_failures_zero": true,
+    "producer_achieved_target": true,
+    "kafka_offset_delta_matches_delivered": true,
+    "broker_outage_observed_in_isr": true,
+    "leader_failover_observed": true,
+    "broker_restarted": true,
+    "full_isr_recovered": true,
+    "all_queries_reached_final_offsets": true,
+    "each_query_offsets_cover_delivered_without_gap": true,
+    "query_runs_remained_active": true,
+    "streaming_container_did_not_restart": true,
+    "postgres_business_key_duplicates_zero": true,
+    "postgres_rows_increased": true,
+    "broker_running_after_recovery": true,
+    "topic_fully_replicated_after_recovery": true
+  },
+  "passed": true,
+  "failure_reasons": []
+}

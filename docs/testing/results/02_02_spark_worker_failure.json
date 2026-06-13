@@ -1,0 +1,286 @@
+{
+  "test": {
+    "name": "Spark Worker forced termination and executor recovery",
+    "target_eps": 12000,
+    "load_duration_seconds": 60,
+    "fault_after_seconds": 20,
+    "outage_seconds": 15,
+    "recovery_timeout_seconds": 300,
+    "started_at": "2026-06-07T13:31:40.544716+00:00",
+    "fault_at": "2026-06-07T13:32:00.549941+00:00",
+    "worker_restart_observed_at": "2026-06-07T13:32:16.461074+00:00",
+    "recovery_started_at": "2026-06-07T13:32:16.079981+00:00",
+    "executor_reallocated_at": "2026-06-07T13:32:20.520427+00:00",
+    "finished_at": "2026-06-07T13:33:04.638930+00:00",
+    "fault_command": "docker stop --time 0 spark-worker; wait 15s; docker start spark-worker",
+    "stop_return_code": 0,
+    "stop_output": "Flag --time has been deprecated, use --timeout instead\nspark-worker",
+    "start_return_code": 0,
+    "start_output": "spark-worker"
+  },
+  "producer": {
+    "configuration": {
+      "duration_seconds": 60,
+      "bootstrap_servers": "localhost:9092,localhost:9093,localhost:9094",
+      "schema_registry_url": "http://localhost:8081",
+      "acks": "all",
+      "idempotence": true,
+      "compression": "lz4",
+      "linger_ms": 10,
+      "batch_size": 32768,
+      "event_profile": {
+        "anomaly_ratio": 0.1,
+        "anomaly_session_pool": 4,
+        "anomaly_item_pool": 3,
+        "duplicate_ratio": 0.001,
+        "late_ratio": 0.001,
+        "late_minutes": 11
+      }
+    },
+    "click": {
+      "target_eps": 12000,
+      "actual_eps": 11999.93,
+      "target_achievement_pct": 100.0,
+      "attempted": 719996,
+      "delivered": 719996,
+      "failed": 0,
+      "success_rate_pct": 100.0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 9.37,
+        "p95": 15.6,
+        "p99": 20.22
+      }
+    },
+    "purchase": {
+      "target_eps": 0,
+      "actual_eps": 0.0,
+      "target_achievement_pct": 100,
+      "attempted": 0,
+      "delivered": 0,
+      "failed": 0,
+      "success_rate_pct": 0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    "combined": {
+      "target_eps": 12000,
+      "actual_eps": 11999.93,
+      "attempted": 719996,
+      "delivered": 719996,
+      "failed": 0
+    },
+    "generated_profiles": {
+      "normal": 647395,
+      "anomaly": 71862,
+      "duplicate": 740,
+      "late": 748
+    },
+    "passed": true
+  },
+  "producer_stdout": "[WARMUP] Loading metadata and sending one event per active topic\n[START] duration=60s click=12000 EPS purchase=0 EPS\n[PROGRESS] 10s click=11985.0 EPS purchase=0.0 EPS\n[PROGRESS] 20s click=11995.3 EPS purchase=0.0 EPS\n[PROGRESS] 30s click=11996.3 EPS purchase=0.0 EPS\n[PROGRESS] 40s click=11997.9 EPS purchase=0.0 EPS\n[PROGRESS] 50s click=11999.0 EPS purchase=0.0 EPS\n\n[RESULT]\ntype           target     actual    delivered   failed    success        p50        p95        p99   status\nclick        12000.00   11999.93       719996        0    100.00%      9.37ms     15.60ms     20.22ms     PASS\npurchase         0.00       0.00            0        0      0.00%      0.00ms      0.00ms      0.00ms     PASS\ncombined     12000.00   11999.93       719996        0\n\n[STATUS] PASS\n\n[INFO] JSON result written to C:\\Users\\USER\\Desktop\\bootcamp\\project\\Clickstream-Guardian\\docs\\testing\\results\\02_02_spark_worker_failure_producer.json\n",
+  "producer_stderr": "",
+  "kafka": {
+    "offsets_before": {
+      "0": 16572394,
+      "1": 16308087,
+      "2": 16386443
+    },
+    "offsets_after": {
+      "0": 16825548,
+      "1": 16523934,
+      "2": 16637439
+    },
+    "offset_delta": 719997,
+    "expected_records_including_warmup": 719997
+  },
+  "spark": {
+    "worker_before": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T13:29:03.495914549Z",
+      "finished_at": "2026-06-07T13:28:48.120659522Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "worker_after_restart": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T13:32:16.162486631Z",
+      "finished_at": "2026-06-07T13:32:00.803069289Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "worker_after_test": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T13:32:16.162486631Z",
+      "finished_at": "2026-06-07T13:32:00.803069289Z",
+      "restart_count": 0,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "streaming_before": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:56:58.456155204Z",
+      "finished_at": "2026-06-07T12:56:58.432082196Z",
+      "restart_count": 1,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "streaming_after": {
+      "status": "running",
+      "running": true,
+      "started_at": "2026-06-07T12:56:58.456155204Z",
+      "finished_at": "2026-06-07T12:56:58.432082196Z",
+      "restart_count": 1,
+      "oom_killed": false,
+      "exit_code": 0
+    },
+    "master_before": {
+      "alive_workers": 1,
+      "workers": [
+        {
+          "id": "worker-20260607132906-172.18.0.13-42275",
+          "state": "ALIVE",
+          "cores": 2,
+          "cores_used": 2,
+          "memory": 2048,
+          "memory_used": 2048
+        },
+        {
+          "id": "worker-20260607073609-172.18.0.13-33149",
+          "state": "DEAD",
+          "cores": 2,
+          "cores_used": 2,
+          "memory": 2048,
+          "memory_used": 2048
+        }
+      ],
+      "active_apps": [
+        {
+          "id": "app-20260607125703-0009",
+          "name": "ClickstreamAnomalyDetector",
+          "state": "RUNNING",
+          "cores": 2
+        }
+      ]
+    },
+    "master_after": {
+      "alive_workers": 1,
+      "workers": [
+        {
+          "id": "worker-20260607132906-172.18.0.13-42275",
+          "state": "DEAD",
+          "cores": 2,
+          "cores_used": 2,
+          "memory": 2048,
+          "memory_used": 2048
+        },
+        {
+          "id": "worker-20260607073609-172.18.0.13-33149",
+          "state": "DEAD",
+          "cores": 2,
+          "cores_used": 2,
+          "memory": 2048,
+          "memory_used": 2048
+        },
+        {
+          "id": "worker-20260607133219-172.18.0.13-44861",
+          "state": "ALIVE",
+          "cores": 2,
+          "cores_used": 2,
+          "memory": 2048,
+          "memory_used": 2048
+        }
+      ],
+      "active_apps": [
+        {
+          "id": "app-20260607125703-0009",
+          "name": "ClickstreamAnomalyDetector",
+          "state": "RUNNING",
+          "cores": 2
+        }
+      ]
+    },
+    "progress": {
+      "queries": {
+        "bot_like": {
+          "run_ids": [
+            "e1744bbf-a72e-4bcf-97b5-11ada5b9e17c"
+          ],
+          "batches_observed": 7,
+          "input_rows_metric_total": 719997,
+          "logical_offset_span": 719997,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 74726,
+          "first_batch_after_fault_completed_at": "2026-06-07T13:32:38.612000+00:00",
+          "final_offsets_reached_at": "2026-06-07T13:33:02.751000+00:00",
+          "final_lag": 0
+        },
+        "high_frequency": {
+          "run_ids": [
+            "030a736f-0ea6-4e03-8e02-44068e44448b"
+          ],
+          "batches_observed": 8,
+          "input_rows_metric_total": 719997,
+          "logical_offset_span": 719997,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 64687,
+          "first_batch_after_fault_completed_at": "2026-06-07T13:32:36.210000+00:00",
+          "final_offsets_reached_at": "2026-06-07T13:33:00.400000+00:00",
+          "final_lag": 0
+        },
+        "late_events": {
+          "run_ids": [
+            "742bb40d-571a-4365-aed4-0c87cb120666"
+          ],
+          "batches_observed": 6,
+          "input_rows_metric_total": 719997,
+          "logical_offset_span": 719997,
+          "input_rows_retry_overcount": 0,
+          "offsets_contiguous": true,
+          "max_lag": 30348,
+          "first_batch_after_fault_completed_at": "2026-06-07T13:32:28.010000+00:00",
+          "final_offsets_reached_at": "2026-06-07T13:32:55.219000+00:00",
+          "final_lag": 0
+        }
+      },
+      "all_queries_recovered_at": "2026-06-07T13:33:02.751000+00:00",
+      "query_started_events": [],
+      "query_terminated_events": []
+    },
+    "rto_seconds": 62.201
+  },
+  "postgres": {
+    "rows_before": 941,
+    "rows_after": 981,
+    "row_delta": 40,
+    "duplicate_business_keys": 0
+  },
+  "assertions": {
+    "producer_failures_zero": true,
+    "kafka_offset_delta_matches_delivered": true,
+    "worker_restart_after_controlled_outage_observed": true,
+    "executor_reallocated": true,
+    "all_queries_reached_final_offsets": true,
+    "each_query_offsets_cover_delivered_without_gap": true,
+    "query_runs_remained_active": true,
+    "streaming_container_did_not_restart": true,
+    "postgres_business_key_duplicates_zero": true,
+    "postgres_rows_increased": true,
+    "worker_running_after_recovery": true,
+    "one_worker_alive_after_recovery": true
+  },
+  "passed": true,
+  "failure_reasons": []
+}

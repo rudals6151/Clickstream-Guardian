@@ -1,0 +1,160 @@
+{
+  "stage": {
+    "target_eps": 5000,
+    "duration_seconds": 60,
+    "drain_seconds": 15,
+    "started_at": "2026-06-07T11:21:03.363332+00:00",
+    "finished_at": "2026-06-07T11:22:20.011583+00:00"
+  },
+  "producer": {
+    "configuration": {
+      "duration_seconds": 60,
+      "bootstrap_servers": "localhost:9092",
+      "schema_registry_url": "http://localhost:8081",
+      "acks": "all",
+      "idempotence": true,
+      "compression": "lz4",
+      "linger_ms": 10,
+      "batch_size": 32768,
+      "event_profile": {
+        "anomaly_ratio": 0.1,
+        "anomaly_session_pool": 4,
+        "anomaly_item_pool": 3,
+        "duplicate_ratio": 0.001,
+        "late_ratio": 0.001,
+        "late_minutes": 11
+      }
+    },
+    "click": {
+      "target_eps": 5000,
+      "actual_eps": 4999.97,
+      "target_achievement_pct": 100.0,
+      "attempted": 299998,
+      "delivered": 299998,
+      "failed": 0,
+      "success_rate_pct": 100.0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 11.33,
+        "p95": 20.1,
+        "p99": 32.52
+      }
+    },
+    "purchase": {
+      "target_eps": 0,
+      "actual_eps": 0.0,
+      "target_achievement_pct": 100,
+      "attempted": 0,
+      "delivered": 0,
+      "failed": 0,
+      "success_rate_pct": 0,
+      "passed": true,
+      "latency_ms": {
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    "combined": {
+      "target_eps": 5000,
+      "actual_eps": 4999.97,
+      "attempted": 299998,
+      "delivered": 299998,
+      "failed": 0
+    },
+    "generated_profiles": {
+      "normal": 269560,
+      "anomaly": 30094,
+      "duplicate": 345,
+      "late": 319
+    },
+    "passed": true
+  },
+  "spark_queries": {
+    "late_events": {
+      "batches": 7,
+      "input_rows": 299999,
+      "processed_rows_per_second_max": 82902.16,
+      "trigger_ms_p95": 1658.0,
+      "trigger_ms_max": 1754.0,
+      "lag_max": 0,
+      "lag_end": 0,
+      "state_rows_end": 0
+    },
+    "high_frequency": {
+      "batches": 14,
+      "input_rows": 299999,
+      "processed_rows_per_second_max": 11719.04,
+      "trigger_ms_p95": 4200.15,
+      "trigger_ms_max": 4648.0,
+      "lag_max": 0,
+      "lag_end": 0,
+      "state_rows_end": 314369
+    },
+    "bot_like": {
+      "batches": 14,
+      "input_rows": 299999,
+      "processed_rows_per_second_max": 12138.35,
+      "trigger_ms_p95": 4539.35,
+      "trigger_ms_max": 5489.0,
+      "lag_max": 0,
+      "lag_end": 0,
+      "state_rows_end": 329353
+    }
+  },
+  "resources": {
+    "spark-streaming-anomaly": {
+      "samples": 11,
+      "cpu_pct_max": 186.95,
+      "cpu_pct_avg": 65.69,
+      "memory_mib_max": 882.9
+    },
+    "spark-worker": {
+      "samples": 11,
+      "cpu_pct_max": 207.34,
+      "cpu_pct_avg": 78.22,
+      "memory_mib_max": 1155.07
+    },
+    "kafka-1": {
+      "samples": 11,
+      "cpu_pct_max": 74.49,
+      "cpu_pct_avg": 27.23,
+      "memory_mib_max": 497.4
+    },
+    "kafka-2": {
+      "samples": 11,
+      "cpu_pct_max": 40.08,
+      "cpu_pct_avg": 19.94,
+      "memory_mib_max": 436.2
+    },
+    "kafka-3": {
+      "samples": 11,
+      "cpu_pct_max": 56.8,
+      "cpu_pct_avg": 20.39,
+      "memory_mib_max": 479.3
+    },
+    "postgres": {
+      "samples": 11,
+      "cpu_pct_max": 4.94,
+      "cpu_pct_avg": 1.52,
+      "memory_mib_max": 37.0
+    }
+  },
+  "postgres": {
+    "rows_before": 501,
+    "rows_after": 541,
+    "row_delta": 40
+  },
+  "restart_counts": {
+    "before": {
+      "spark-streaming-anomaly": 0,
+      "spark-worker": 0
+    },
+    "after": {
+      "spark-streaming-anomaly": 0,
+      "spark-worker": 0
+    }
+  },
+  "passed": true,
+  "failure_reasons": []
+}

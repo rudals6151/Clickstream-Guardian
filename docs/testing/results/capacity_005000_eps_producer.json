@@ -1,0 +1,64 @@
+{
+  "configuration": {
+    "duration_seconds": 60,
+    "bootstrap_servers": "localhost:9092",
+    "schema_registry_url": "http://localhost:8081",
+    "acks": "all",
+    "idempotence": true,
+    "compression": "lz4",
+    "linger_ms": 10,
+    "batch_size": 32768,
+    "event_profile": {
+      "anomaly_ratio": 0.1,
+      "anomaly_session_pool": 4,
+      "anomaly_item_pool": 3,
+      "duplicate_ratio": 0.001,
+      "late_ratio": 0.001,
+      "late_minutes": 11
+    }
+  },
+  "click": {
+    "target_eps": 5000,
+    "actual_eps": 4999.97,
+    "target_achievement_pct": 100.0,
+    "attempted": 299998,
+    "delivered": 299998,
+    "failed": 0,
+    "success_rate_pct": 100.0,
+    "passed": true,
+    "latency_ms": {
+      "p50": 11.33,
+      "p95": 20.1,
+      "p99": 32.52
+    }
+  },
+  "purchase": {
+    "target_eps": 0,
+    "actual_eps": 0.0,
+    "target_achievement_pct": 100,
+    "attempted": 0,
+    "delivered": 0,
+    "failed": 0,
+    "success_rate_pct": 0,
+    "passed": true,
+    "latency_ms": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0
+    }
+  },
+  "combined": {
+    "target_eps": 5000,
+    "actual_eps": 4999.97,
+    "attempted": 299998,
+    "delivered": 299998,
+    "failed": 0
+  },
+  "generated_profiles": {
+    "normal": 269560,
+    "anomaly": 30094,
+    "duplicate": 345,
+    "late": 319
+  },
+  "passed": true
+}
