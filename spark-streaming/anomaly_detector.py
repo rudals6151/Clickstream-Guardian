@@ -8,10 +8,13 @@ based on patterns like:
 - Unusual session duration
 """
 import sys
+import builtins
 import logging
 import os
 import json
+import time
 from pathlib import Path
+from threading import Lock
 from urllib import request
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
@@ -20,7 +23,8 @@ from pyspark.sql.functions import (
     unix_timestamp, expr, to_json, struct,
     approx_count_distinct,
 )
-from pyspark.sql.types import StructType, StructField, StringType, LongType
+from pyspark.sql.types import StructType, StructField, StringType, LongType, TimestampType
+from pyspark.sql.streaming import StreamingQueryListener
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -34,6 +38,47 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class JsonProgressListener(StreamingQueryListener):
+    """Persist progress for every streaming query as JSON Lines."""
+
+    def __init__(self, output_path):
+        super().__init__()
+        self.output_path = Path(output_path)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        self.lock = Lock()
+
+    def _append(self, payload):
+        with self.lock:
+            with self.output_path.open("a", encoding="utf-8") as output:
+                output.write(json.dumps(payload, ensure_ascii=True) + "\n")
+
+    def onQueryStarted(self, event):
+        self._append({
+            "event": "query_started",
+            "id": str(event.id),
+            "run_id": str(event.runId),
+            "name": event.name,
+            "timestamp": event.timestamp,
+        })
+
+    def onQueryProgress(self, event):
+        payload = json.loads(event.progress.json)
+        payload["event"] = "query_progress"
+        self._append(payload)
+
+    def onQueryTerminated(self, event):
+        self._append({
+            "event": "query_terminated",
+            "id": str(event.id),
+            "run_id": str(event.runId),
+            "exception": event.exception,
+            "error_class": event.errorClassOnException,
+        })
+
+    def onQueryIdle(self, event):
+        return None
 
 
 def load_click_avro_schema():
@@ -67,9 +112,16 @@ class AnomalyDetector:
     """Real-time anomaly detection for clickstream data"""
     
     def __init__(self, kafka_servers="kafka-1:29092,kafka-2:29093,kafka-3:29094",
-                 checkpoint_location="/opt/spark-checkpoint/anomaly"):
+                 checkpoint_location="/opt/spark-checkpoint/anomaly",
+                 click_topic="km.clicks.raw.v1",
+                 max_offsets_per_trigger=250000,
+                 progress_output="/opt/test-results/streaming_progress.jsonl"):
         self.kafka_servers = kafka_servers
         self.checkpoint_location = checkpoint_location
+        self.click_topic = click_topic
+        self.max_offsets_per_trigger = max_offsets_per_trigger
+        self.progress_output = progress_output
+        self.shuffle_partitions = int(os.getenv("SPARK_SHUFFLE_PARTITIONS", "2"))
         self.late_topic = os.getenv("LATE_EVENTS_TOPIC", "km.events.late.v1")
         self.event_time_policy_minutes = int(
             os.getenv("EVENT_TIME_POLICY_MINUTES", os.getenv("LATE_EVENT_THRESHOLD_MINUTES", "10"))
@@ -87,13 +139,20 @@ class AnomalyDetector:
             .appName("ClickstreamAnomalyDetector") \
             .config("spark.sql.streaming.schemaInference", "true") \
             .config("spark.streaming.kafka.consumer.cache.capacity", "1000") \
-            .config("spark.sql.shuffle.partitions", "4") \
+            .config("spark.sql.shuffle.partitions", str(self.shuffle_partitions)) \
             .config("spark.sql.streaming.stateStore.stateSchemaCheck", "false") \
+            .config(
+                "spark.sql.streaming.stateStore.providerClass",
+                "org.apache.spark.sql.execution.streaming.state.RocksDBStateStoreProvider"
+            ) \
+            .config("spark.sql.streaming.stateStore.rocksdb.boundedMemoryUsage", "true") \
+            .config("spark.sql.streaming.stateStore.rocksdb.maxMemoryUsageMB", "512") \
             .config("spark.sql.streaming.statefulOperator.checkCorrectness.enabled", "false") \
             .config("spark.sql.streaming.statefulOperator.allowMultiple", "false") \
             .getOrCreate()
         
         self.spark.sparkContext.setLogLevel("WARN")
+        self.spark.streams.addListener(JsonProgressListener(self.progress_output))
         logger.info("Spark session initialized")
         logger.info(
             "Click schema loaded from %s (schema_id=%s)",
@@ -101,11 +160,13 @@ class AnomalyDetector:
             self.click_schema_id if self.click_schema_id is not None else "n/a",
         )
         logger.info("Event time policy: %s", self.watermark_duration)
+        logger.info("Max offsets per trigger: %s", self.max_offsets_per_trigger)
+        logger.info("Shuffle partitions: %s", self.shuffle_partitions)
+        logger.info("Streaming progress output: %s", self.progress_output)
         
         # Anomaly detection thresholds
-        # Adjusted threshold for easier testing (originally 50 -> 20)
         self.HIGH_FREQUENCY_THRESHOLD = 50  # clicks in 10 seconds
-        self.BOT_LIKE_THRESHOLD = 50  # clicks in 1 minute (100 -> 50)
+        self.BOT_LIKE_THRESHOLD = 50  # clicks in 1 minute
         self.LOW_DIVERSITY_RATIO = 0.1  # unique items / total clicks
     
     def read_kafka_stream(self):
@@ -114,12 +175,10 @@ class AnomalyDetector:
         
         kafka_options = get_kafka_options(
             bootstrap_servers=self.kafka_servers,
-            topic="km.clicks.raw.v1"
+            topic=self.click_topic,
+            starting_offsets="latest",
+            max_offsets_per_trigger=self.max_offsets_per_trigger,
         )
-        
-        # Use "latest" to start from current data (not historical)
-        # "earliest" would read all past data, complicating watermark handling
-        kafka_options["startingOffsets"] = "latest"
         
         return self.spark \
             .readStream \
@@ -148,18 +207,26 @@ class AnomalyDetector:
             col("kafka_ingest_ts")
         ).select("data.*", "kafka_ingest_ts")
         
-        # Explicitly convert event_ts from long (milliseconds) to timestamp
-        # Avro logical type may not be auto-converted in all cases
-        clicks_df = clicks_df.withColumn(
-            "event_ts",
-            (col("event_ts") / 1000).cast("timestamp")
-        )
+        # Spark may decode Avro timestamp-millis as either timestamp or long,
+        # depending on the schema source and Spark Avro behavior.
+        if not isinstance(clicks_df.schema["event_ts"].dataType, TimestampType):
+            clicks_df = clicks_df.withColumn(
+                "event_ts",
+                (col("event_ts") / 1000).cast("timestamp")
+            )
 
-        clicks_df = clicks_df.withColumn(
-            "ingest_ts",
-            when(col("ingest_ts") > 0, (col("ingest_ts") / 1000).cast("timestamp"))
-            .otherwise(col("kafka_ingest_ts"))
-        )
+        if isinstance(clicks_df.schema["ingest_ts"].dataType, TimestampType):
+            clicks_df = clicks_df.withColumn(
+                "ingest_ts",
+                when(col("ingest_ts").isNotNull(), col("ingest_ts"))
+                .otherwise(col("kafka_ingest_ts"))
+            )
+        else:
+            clicks_df = clicks_df.withColumn(
+                "ingest_ts",
+                when(col("ingest_ts") > 0, (col("ingest_ts") / 1000).cast("timestamp"))
+                .otherwise(col("kafka_ingest_ts"))
+            )
 
         clicks_df = clicks_df.withColumn(
             "event_id",
@@ -212,6 +279,7 @@ class AnomalyDetector:
         )
 
         return payload.writeStream \
+            .queryName("late_events") \
             .format("kafka") \
             .option("kafka.bootstrap.servers", self.kafka_servers) \
             .option("topic", self.late_topic) \
@@ -348,25 +416,36 @@ class AnomalyDetector:
         
         return bot_like
     
-    def write_to_postgres(self, df, output_mode="update"):
+    def write_to_postgres(self, df, query_name, output_mode="update"):
         """Write anomalies to PostgreSQL"""
         postgres_props = get_postgres_properties()
         jdbc_url = postgres_props["url"].replace("jdbc:", "")
         db_user = postgres_props["user"]
         db_password = postgres_props["password"]
+        connect_timeout = int(os.getenv("POSTGRES_CONNECT_TIMEOUT_SECONDS", "3"))
+        max_attempts = int(os.getenv("POSTGRES_WRITE_MAX_ATTEMPTS", "6"))
+        initial_backoff = float(
+            os.getenv("POSTGRES_WRITE_INITIAL_BACKOFF_SECONDS", "1")
+        )
+        max_backoff = float(
+            os.getenv("POSTGRES_WRITE_MAX_BACKOFF_SECONDS", "8")
+        )
+
+        if connect_timeout < 1:
+            raise ValueError("POSTGRES_CONNECT_TIMEOUT_SECONDS must be at least 1")
+        if max_attempts < 1:
+            raise ValueError("POSTGRES_WRITE_MAX_ATTEMPTS must be at least 1")
+        if initial_backoff < 0 or max_backoff < 0:
+            raise ValueError("PostgreSQL retry backoff values cannot be negative")
+
+        retryable_db_errors = (
+            psycopg2.OperationalError,
+            psycopg2.InterfaceError,
+        )
         
         def write_batch(batch_df, batch_id):
             """Batch write function"""
-            cnt = batch_df.count()
-            if cnt == 0:
-                logger.info(f"Batch {batch_id}: No anomalies detected")
-                return
-            
             try:
-                # Show sample for debugging
-                logger.info(f"Batch {batch_id}: Detected {cnt} anomalies")
-                batch_df.show(5, truncate=False)
-
                 rows = batch_df.select(
                     "event_id",
                     "event_ts",
@@ -382,6 +461,13 @@ class AnomalyDetector:
                     "spark_process_ts",
                     "source"
                 ).dropDuplicates(["event_id"]).collect()
+
+                if not rows:
+                    logger.info(f"Batch {batch_id}: No anomalies detected")
+                    return
+
+                logger.info(f"Batch {batch_id}: Detected {len(rows)} anomalies")
+                logger.debug("Batch %s sample: %s", batch_id, rows[:5])
 
                 values = [
                     (
@@ -402,31 +488,71 @@ class AnomalyDetector:
                     for row in rows
                 ]
 
-                with psycopg2.connect(jdbc_url, user=db_user, password=db_password) as conn:
-                    with conn.cursor() as cur:
-                        execute_values(
-                            cur,
-                            """
-                            INSERT INTO anomaly_sessions (
-                                event_id, event_ts, session_id, detected_at, window_start, window_end,
-                                click_count, unique_items, anomaly_score, anomaly_type,
-                                kafka_ingest_ts, spark_process_ts, source
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        with psycopg2.connect(
+                            jdbc_url,
+                            user=db_user,
+                            password=db_password,
+                            connect_timeout=connect_timeout,
+                        ) as conn:
+                            with conn.cursor() as cur:
+                                event_ids = [value[0] for value in values]
+                                cur.execute(
+                                    "DELETE FROM anomaly_sessions WHERE event_id = ANY(%s)",
+                                    (event_ids,)
+                                )
+                                execute_values(
+                                    cur,
+                                    """
+                                    INSERT INTO anomaly_sessions (
+                                        event_id, event_ts, session_id, detected_at, window_start, window_end,
+                                        click_count, unique_items, anomaly_score, anomaly_type,
+                                        kafka_ingest_ts, spark_process_ts, source, db_write_ts
+                                    )
+                                    VALUES %s
+                                    ON CONFLICT (session_id, window_start, anomaly_type, detected_at)
+                                    DO UPDATE SET
+                                        click_count = EXCLUDED.click_count,
+                                        unique_items = EXCLUDED.unique_items,
+                                        anomaly_score = EXCLUDED.anomaly_score,
+                                        kafka_ingest_ts = EXCLUDED.kafka_ingest_ts,
+                                        spark_process_ts = EXCLUDED.spark_process_ts,
+                                        source = EXCLUDED.source,
+                                        db_write_ts = CURRENT_TIMESTAMP,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    """,
+                                    values,
+                                    template=(
+                                        "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                                        "%s, %s, %s, CURRENT_TIMESTAMP)"
+                                    )
+                                )
+                            conn.commit()
+                        break
+                    except retryable_db_errors as error:
+                        if attempt == max_attempts:
+                            logger.error(
+                                "Batch %s: PostgreSQL write failed after %s attempts",
+                                batch_id,
+                                max_attempts,
                             )
-                            VALUES %s
-                            ON CONFLICT (session_id, window_start, anomaly_type, detected_at)
-                            DO UPDATE SET
-                                click_count = EXCLUDED.click_count,
-                                unique_items = EXCLUDED.unique_items,
-                                anomaly_score = EXCLUDED.anomaly_score,
-                                kafka_ingest_ts = EXCLUDED.kafka_ingest_ts,
-                                spark_process_ts = EXCLUDED.spark_process_ts,
-                                source = EXCLUDED.source,
-                                db_write_ts = CURRENT_TIMESTAMP,
-                                updated_at = CURRENT_TIMESTAMP
-                            """,
-                            values
+                            raise
+
+                        backoff = builtins.min(
+                            initial_backoff * (2 ** (attempt - 1)),
+                            max_backoff,
                         )
-                    conn.commit()
+                        logger.warning(
+                            "Batch %s: PostgreSQL unavailable on attempt %s/%s: %s. "
+                            "Retrying in %.1f seconds",
+                            batch_id,
+                            attempt,
+                            max_attempts,
+                            error,
+                            backoff,
+                        )
+                        time.sleep(backoff)
 
                 logger.info(f"Batch {batch_id}: Upserted {len(values)} rows to database")
                 
@@ -438,9 +564,10 @@ class AnomalyDetector:
         # Use update mode (append not supported without watermark)
         query = df \
             .writeStream \
+            .queryName(query_name) \
             .outputMode(output_mode) \
             .foreachBatch(write_batch) \
-            .option("checkpointLocation", f"{self.checkpoint_location}/{output_mode}") \
+            .option("checkpointLocation", f"{self.checkpoint_location}/{query_name}") \
             .trigger(processingTime='5 seconds') \
             .start()
         
@@ -501,6 +628,7 @@ class AnomalyDetector:
         # Use update mode (append not possible without watermark)
         query1 = self.write_to_postgres(
             high_frequency_anomalies,
+            query_name="high_frequency",
             output_mode="update"
         )
         
@@ -513,7 +641,11 @@ class AnomalyDetector:
         
         # Bot-like detection: 1분 윈도우에서 고빈도 + 저다양성 세션 탐지
         bot_like_anomalies = self.detect_bot_like(deduped_clicks)
-        query3 = self.write_to_postgres(bot_like_anomalies, output_mode="append")
+        query3 = self.write_to_postgres(
+            bot_like_anomalies,
+            query_name="bot_like",
+            output_mode="update",
+        )
         
         logger.info("Anomaly detection job started successfully")
         logger.info(f"Checkpoint location: {self.checkpoint_location}")
@@ -550,6 +682,22 @@ def main():
         help='Checkpoint location'
     )
     parser.add_argument(
+        '--click-topic',
+        default='km.clicks.raw.v1',
+        help='Kafka click topic to consume'
+    )
+    parser.add_argument(
+        '--max-offsets-per-trigger',
+        type=int,
+        default=250000,
+        help='Maximum Kafka records consumed by each query per trigger'
+    )
+    parser.add_argument(
+        '--progress-output',
+        default='/opt/test-results/streaming_progress.jsonl',
+        help='JSONL path for StreamingQueryProgress events'
+    )
+    parser.add_argument(
         '--no-console',
         action='store_true',
         help='Disable console output'
@@ -559,7 +707,10 @@ def main():
     
     detector = AnomalyDetector(
         kafka_servers=args.kafka_servers,
-        checkpoint_location=args.checkpoint
+        checkpoint_location=args.checkpoint,
+        click_topic=args.click_topic,
+        max_offsets_per_trigger=args.max_offsets_per_trigger,
+        progress_output=args.progress_output,
     )
     
     detector.run(enable_console=not args.no_console)

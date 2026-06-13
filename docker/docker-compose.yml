@@ -37,6 +37,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_JMX_PORT: 19092
       KAFKA_JMX_HOSTNAME: kafka-1
+      KAFKA_HEAP_OPTS: "${KAFKA_BROKER_HEAP_OPTS:--Xms256M -Xmx512M}"
     volumes:
       - kafka-data-1:/var/lib/kafka/data
     networks:
@@ -70,6 +71,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_JMX_PORT: 19093
       KAFKA_JMX_HOSTNAME: kafka-2
+      KAFKA_HEAP_OPTS: "${KAFKA_BROKER_HEAP_OPTS:--Xms256M -Xmx512M}"
     volumes:
       - kafka-data-2:/var/lib/kafka/data
     networks:
@@ -97,6 +99,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_JMX_PORT: 19094
       KAFKA_JMX_HOSTNAME: kafka-3
+      KAFKA_HEAP_OPTS: "${KAFKA_BROKER_HEAP_OPTS:--Xms256M -Xmx512M}"
     volumes:
       - kafka-data-3:/var/lib/kafka/data
     networks:
@@ -177,6 +180,7 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+      KAFKA_HEAP_OPTS: -Xms256M -Xmx512M
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
@@ -202,6 +206,7 @@ services:
     image: postgres:15-alpine
     hostname: postgres
     container_name: postgres
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -260,8 +265,44 @@ services:
       - "8084:8081"
     environment:
       - SPARK_NO_DAEMONIZE=1
-      - SPARK_WORKER_MEMORY=2G
-      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=${SPARK_WORKER_MEMORY:-2G}
+      - SPARK_WORKER_CORES=${SPARK_WORKER_CORES:-2}
+    volumes:
+      - ../spark-streaming:/opt/spark-streaming
+      - ../spark-batch:/opt/spark-batch
+      - ./schemas:/opt/schemas
+      - spark-checkpoints:/opt/spark-checkpoint
+    networks:
+      - clickstream-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2'
+    user: root
+    command:
+      - bash
+      - -c
+      - |
+        mkdir -p /opt/spark-checkpoint
+        chmod -R 777 /opt/spark-checkpoint
+        /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+
+  # Additional worker profile
+  spark-worker-2:
+    profiles: ["spark-scale"]
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-worker-2
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    environment:
+      - SPARK_NO_DAEMONIZE=1
+      - SPARK_WORKER_MEMORY=${SPARK_WORKER_2_MEMORY:-2G}
+      - SPARK_WORKER_CORES=${SPARK_WORKER_2_CORES:-1}
     volumes:
       - ../spark-streaming:/opt/spark-streaming
       - ../spark-batch:/opt/spark-batch
@@ -277,6 +318,64 @@ services:
         mkdir -p /opt/spark-checkpoint
         chmod -R 777 /opt/spark-checkpoint
         /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+
+  # Spark throughput benchmark
+  spark-throughput:
+    profiles: ["spark-test"]
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark-throughput-benchmark
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      spark-worker:
+        condition: service_started
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_started
+      kafka-3:
+        condition: service_started
+      schema-registry:
+        condition: service_started
+    environment:
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+    volumes:
+      - ../spark-streaming:/opt/spark-streaming
+      - ./schemas:/opt/schemas
+      - ../docs/testing/results:/opt/test-results
+      - spark-checkpoints:/opt/spark-checkpoint
+    networks:
+      - clickstream-net
+    restart: "no"
+    user: root
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2'
+    command:
+      - bash
+      - -c
+      - |
+        mkdir -p /root/.ivy2 /opt/spark-checkpoint /opt/test-results
+        chmod -R 777 /opt/spark-checkpoint /opt/test-results
+        /opt/spark/bin/spark-submit \
+          --master spark://spark-master:7077 \
+          --deploy-mode client \
+          --driver-memory 1g \
+          --executor-memory 1536m \
+          --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.spark:spark-avro_2.12:3.5.0 \
+          /opt/spark-streaming/throughput_benchmark.py \
+          --topic ${SPARK_THROUGHPUT_TOPIC:-km.spark.throughput.test.v1} \
+          --checkpoint ${SPARK_THROUGHPUT_CHECKPOINT:-/opt/spark-checkpoint/throughput-pure-1w1c} \
+          --progress-output ${SPARK_THROUGHPUT_PROGRESS:-/opt/test-results/02a_spark_throughput_1w1c_progress.jsonl} \
+          --batch-output ${SPARK_THROUGHPUT_BATCHES:-/opt/test-results/02a_spark_throughput_1w1c_batches.jsonl} \
+          --trigger-seconds ${SPARK_THROUGHPUT_TRIGGER_SECONDS:-5} \
+          --max-offsets-per-trigger ${SPARK_THROUGHPUT_MAX_OFFSETS:-1000000} \
+          --shuffle-partitions ${SPARK_THROUGHPUT_SHUFFLE_PARTITIONS:-3} \
+          ${SPARK_THROUGHPUT_EXTRA_ARGS:-}
 
   # Spark Streaming (Always Running)
   spark-streaming:
@@ -305,9 +404,16 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-clickstream}
+      - POSTGRES_CONNECT_TIMEOUT_SECONDS=${POSTGRES_CONNECT_TIMEOUT_SECONDS:-3}
+      - POSTGRES_WRITE_MAX_ATTEMPTS=${POSTGRES_WRITE_MAX_ATTEMPTS:-6}
+      - POSTGRES_WRITE_INITIAL_BACKOFF_SECONDS=${POSTGRES_WRITE_INITIAL_BACKOFF_SECONDS:-1}
+      - POSTGRES_WRITE_MAX_BACKOFF_SECONDS=${POSTGRES_WRITE_MAX_BACKOFF_SECONDS:-8}
+      - SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - SPARK_SHUFFLE_PARTITIONS=${SPARK_SHUFFLE_PARTITIONS:-2}
     volumes:
       - ../spark-streaming:/opt/spark-streaming
       - ./schemas:/opt/schemas
+      - ../docs/testing/results:/opt/test-results
       - spark-checkpoints:/opt/spark-checkpoint
     networks:
       - clickstream-net
@@ -322,12 +428,11 @@ services:
       - bash
       - -c
       - |
-        echo "Waiting for services to be ready..."
-        sleep 30
         echo "Creating ivy2 cache directory..."
         mkdir -p /root/.ivy2
         mkdir -p /opt/spark-checkpoint
-        chmod -R 777 /opt/spark-checkpoint
+        mkdir -p /opt/test-results
+        chmod -R 777 /opt/spark-checkpoint /opt/test-results
         echo "Starting Spark Streaming Job..."
         /opt/spark/bin/spark-submit \
           --master spark://spark-master:7077 \
@@ -336,7 +441,10 @@ services:
           --executor-memory 2g \
           --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0,org.apache.spark:spark-avro_2.12:3.5.0 \
           /opt/spark-streaming/anomaly_detector.py \
-          --checkpoint /opt/spark-checkpoint/anomaly \
+          --checkpoint ${SPARK_STREAMING_CHECKPOINT:-/opt/spark-checkpoint/pipeline-capacity-v4} \
+          --click-topic ${SPARK_STREAMING_CLICK_TOPIC:-km.clicks.raw.v1} \
+          --max-offsets-per-trigger ${SPARK_STREAMING_MAX_OFFSETS:-250000} \
+          --progress-output ${SPARK_STREAMING_PROGRESS:-/opt/test-results/pipeline_capacity_progress.jsonl} \
           --no-console
 
   # Airflow PostgreSQL

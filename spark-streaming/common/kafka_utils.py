@@ -27,15 +27,22 @@ def get_purchase_schema():
     ])
 
 
-def get_kafka_options(bootstrap_servers, topic, group_id=None):
+def get_kafka_options(
+    bootstrap_servers,
+    topic,
+    group_id=None,
+    starting_offsets="earliest",
+    max_offsets_per_trigger=10000,
+):
     """Get Kafka connection options for Spark"""
     options = {
         "kafka.bootstrap.servers": bootstrap_servers,
         "subscribe": topic,
-        "startingOffsets": "earliest",
+        "startingOffsets": starting_offsets,
         "failOnDataLoss": "false",
-        "maxOffsetsPerTrigger": "10000"
     }
+    if max_offsets_per_trigger is not None:
+        options["maxOffsetsPerTrigger"] = str(max_offsets_per_trigger)
     if group_id:
         options["kafka.group.id"] = group_id
     return options
