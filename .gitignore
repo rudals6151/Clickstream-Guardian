@@ -66,6 +66,13 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 
+# Generated test progress and intermediate runs
+docs/testing/results/*_progress.jsonl
+docs/testing/results/streaming_progress.jsonl
+docs/testing/results/*preliminary*.json
+docs/testing/results/*before_*_fix*.json
+docs/testing/results/*observation_fix*.json
+
 # Temporary files
 tmp/
 temp/
